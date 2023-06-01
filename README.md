@@ -126,11 +126,22 @@ do_train(cfg, model, train_loader, val_loader, optimizer, None, F.cross_entropy)
 
 # Future Work
 
+
+
 # Contributing
 Any kind of enhancement or contribution is welcomed.
+
 
 
 # Acknowledgments
 
 
 
+# Scope of Work
+
+- Dataloader for Parcel Data
+- Training Engine
+- Inference Engine
+- Multi GPU support
+- Custom Modelling
+- Custom dataset size
