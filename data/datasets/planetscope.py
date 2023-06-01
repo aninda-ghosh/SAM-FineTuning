@@ -7,7 +7,7 @@
 import numpy as np
 import cv2
 import geopandas as gpd
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 class ParcelDataset(Dataset):
     """Parcel dataset
@@ -15,27 +15,28 @@ class ParcelDataset(Dataset):
     This class is used to load the dataset.
     The data is stored in a folder with the following structure:
     - data
-        - france
-            - parcels
-                - xxxxx.png
-                - xxxxx.geojson
-                - ...
+        - parcels
+            - xxxxx.png
+            - xxxxx.geojson
+            - ...
 
     The labels is loaded using the `geopandas` library.
     The images are loaded using the `matplotlib.pyplot` module.
     The labels are stored in boolean masks. The masks are stored in a list.
     """
     
-    def __init__(self, path, size=(224, 224)):
+    def __init__(self, path):
         """
         Args:
             path (string): Path to the folder containing the dataset.
+            The dataset is stored in a single folder.
         """
         self.path = path
-
-        # TODO: I don't know what the file structure is going to be like, NEED Discussion with Manthan
-        self.data = gpd.read_file(path + "parcel_data.geojson") 
-        self.image_paths, self.bbox_prompts, self.point_prompts, self.labels = self._get_image_prompts_labels(self.data, size=size)
+        # Read the merged parcel data geo json file, This contains the parcel id and the geometry of all the parcels
+        self.data = gpd.read_file(self.path + "merger_parcel_data.geojson")
+        # Get the image paths, pixel masks and labels
+        self.data = self._get_image_prompts_labels(self.data)
+        
         self.length = len(self.data)
         
     def __len__(self):
@@ -43,40 +44,34 @@ class ParcelDataset(Dataset):
     
     def __getitem__(self, idx):
         """
-        This function returns the image and the pixel mask for given list of indexes.
+        This function returns one sample from the dataset.
 
         Args: idx (list): List of indexes.
 
         Returns:
-            zipped
             np.array: Image as data
-            np.array: List of pixel masks.
             np.array: List of box prompts.
             np.array: List of point prompts.
+            np.array: List of pixel masks.
         """
         # TODO: Need to fix this function to return single image, bbox prompt, point prompt and pixel mask            
-        image_path = self.images[idx]
-        label = self.labels[idx]
-        
-        # Handle the case where the idx is not a list
-        if isinstance(image_path, str):
-            image_path = [image_path]
-                
-        all_images = []
-        for path in image_path:
-            image = cv2.imread(path)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            all_images.append(image)
-        
-        # Zipping the images and the pixel masks for random shuffling in the data loader
-        return zip(np.array(all_images), np.array(label, dtype=object))
+        image_path = self.data[0][idx]
+        # Read the image    
+        image = cv2.imread(image_path)
+        image = np.array(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-    def _convert_polygons_pixel_maps(self, row, label_list, size):
+        bbox_prompts = self.data[1][idx]
+        point_prompts = self.data[2][idx]
+        labels = self.data[3][idx]
+
+        return image, bbox_prompts, point_prompts, labels
+
+    def _convert_polygons_to_pixels(self, parcel_geometry, polygon_labels, size):
         # Create a black background
         background = np.zeros(size, dtype=np.uint8)
-        
+         
         # Get the polygon bounds
-        min_lon, min_lat, max_lon, max_lat = row.geometry.bounds
+        min_lon, min_lat, max_lon, max_lat = parcel_geometry.bounds
         
         # Get the width and height of the parcel
         height = max_lat - min_lat
@@ -87,7 +82,7 @@ class ParcelDataset(Dataset):
         pixel_width = size[1]/width
 
         pixel_masks = []
-        for label in label_list.geometry:
+        for label in polygon_labels.geometry:
             pixel_mask = background.copy()
             # Iterate over the polygons in the multipolygon
             for polygon in label.geoms:
@@ -110,24 +105,39 @@ class ParcelDataset(Dataset):
                 # Fill the polygons and append to the pixel mask
                 cv2.fillPoly(pixel_mask, pts=[pixel_coords], color=255)
             pixel_masks.append(pixel_mask.astype(dtype=bool))
-        return pixel_masks
+        
+        # Return the pixel masks as a numpy array
+        return np.array(pixel_masks)    
 
     def _get_bbox_and_point_prompts(self, pixel_masks):
-        # TODO: This function needs to be implemented to obtain the bbox and point prompts
         bbox_prompts = []
         point_prompts = []
         for mask in pixel_masks:
-            # Get the bounding box
-            pass
+            # get bounding box from mask
+            y_indices, x_indices = np.where(mask > 0)
+            x_min, x_max = np.min(x_indices), np.max(x_indices)
+            y_min, y_max = np.min(y_indices), np.max(y_indices)
+            # add perturbation to bounding box coordinates
+            H, W = mask.shape
+            x_min = max(0, x_min - np.random.randint(0, 20))
+            x_max = min(W, x_max + np.random.randint(0, 20))
+            y_min = max(0, y_min - np.random.randint(0, 20))
+            y_max = min(H, y_max + np.random.randint(0, 20))
+            bbox = [x_min, y_min, x_max, y_max]
+            bbox_prompts.append(bbox)
 
-            # Get the point prompts
-            pass
+            # Get grid points within the bounding box
+            x = np.linspace(x_min, x_max, int((x_max-x_min)/10))
+            y = np.linspace(y_min, y_max, int((y_max-y_min)/10))
+
+            point_prompts.append(list((int(_x),int(_y)) for _x,_y in zip(x,y)))
 
         return bbox_prompts, point_prompts
 
-    def _get_image_prompts_labels(self, parcel_data, size = (448, 448)):
+    def _get_image_prompts_labels(self, parcel_data, size=(448, 448)):
         """Convert the polygon masks to pixel masks
-
+        Note:
+            Refrain from sending image sizes more than 1000x1000. This can cause some issues with SAM image encoder.
         Args:
             parcel_data (geopandas.GeoDataFrame): GeoDataFrame containing the parcel data.
 
@@ -136,26 +146,27 @@ class ParcelDataset(Dataset):
             list: List of pixel masks.
         """
         
-        # Store the processed data in a dictionary
-        processed_data = {
-            'image_paths': [],
-            'pixel_masks': []
-        }
+        # Store the processed data in a list
+        processed_data = []
         
-        for _, row in parcel_data.iterrows():
-            # Read the label list first to check if the parcel has labels
-            label_list = gpd.read_file(self.path + row['parcel_id'] + '.geojson')
-
-            # If the parcel has no labels, Ignore that parcel
-            if len(label_list) == 0:
+        for _, data in parcel_data.iterrows():
+            parcel_id = data['parcel_id']
+            geometry = data['geometry']
+            
+            polygon_mask_list = gpd.read_file(self.path + parcel_id + '.geojson')
+            
+            # TODO: This is an ambiguous step, need to figure out how to handle this, Ask Hannah about this
+            # If the parcel has no labels, let's keep it with no labels and no prompts
+            if len(polygon_mask_list) == 0:
+                # Store the image path based on the current geoJSON file name only if the parcel has labels
+                processed_data.append((self.path + parcel_id + '.png', [], [], []))
                 continue
             
-            # Store the image path based on the current geoJSON file name only if the parcel has labels
-            processed_data['image_paths'].append(self.path + row['parcel_id'] + '.png')
+            # Get the pixel masks for the parcel
+            pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)
+            # Get the bounding boxes and point prompts for the parcel
+            bounding_boxes, point_prompts = self._get_bbox_and_point_prompts(pixel_masks)
 
-            
+            processed_data.append((self.path + parcel_id + '.png', bounding_boxes, point_prompts, pixel_masks))
 
-            # Append the pixel masks to the list
-            processed_data['pixel_masks'].append(np.array(pixel_masks))
-
-        return processed_data['image_paths'], processed_data['bbox_prompts'], processed_data['point_prompts'], processed_data['pixel_masks']
+        return processed_data
