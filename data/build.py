@@ -40,15 +40,15 @@ class SAM_Dataloader(DataLoader):
 
         # Create the data loaders
         train_loader = data.DataLoader(
-            train_dataset, batch_size=self.cfg.SOLVER.ITEMS_PER_BATCH, shuffle=True, num_workers=self.cfg.DATALOADER.NUM_WORKERS
+            train_dataset, batch_size=self.cfg.SOLVER.ITEMS_PER_BATCH, shuffle=True, num_workers=self.cfg.DATALOADER.NUM_WORKERS, collate_fn=lambda x: x
         )
 
         valid_loader = data.DataLoader(
-            valid_dataset, batch_size=self.cfg.VALID.ITEMS_PER_BATCH, shuffle=False, num_workers=self.cfg.DATALOADER.NUM_WORKERS
+            valid_dataset, batch_size=self.cfg.VALID.ITEMS_PER_BATCH, shuffle=False, num_workers=self.cfg.DATALOADER.NUM_WORKERS, collate_fn=lambda x: x
         )
 
         test_loader = data.DataLoader(
-            test_dataset, batch_size=self.cfg.TEST.ITEMS_PER_BATCH, shuffle=False, num_workers=self.cfg.DATALOADER.NUM_WORKERS
+            test_dataset, batch_size=self.cfg.TEST.ITEMS_PER_BATCH, shuffle=False, num_workers=self.cfg.DATALOADER.NUM_WORKERS, collate_fn=lambda x: x
         )
         
         return train_loader, valid_loader, test_loader

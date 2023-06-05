@@ -1,8 +1,9 @@
 # encoding: utf-8
 """
-@author:  sherlock
-@contact: sherlockliao01@gmail.com
+@author:  Aninda Ghosh
+@contact: aghosh57@asu.edu
 """
+
 import logging
 
 from ignite.engine import Events

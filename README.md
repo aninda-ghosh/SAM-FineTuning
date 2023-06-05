@@ -9,7 +9,7 @@ In order to decrease repeated stuff, we recommend to use a high-level library. Y
 # Requirements
 - [yacs](https://github.com/rbgirshick/yacs) (Yet Another Configuration System)
 - [PyTorch](https://pytorch.org/) (An open source deep learning platform) 
-- [ignite](https://github.com/pytorch/ignite) (High-level library to help with training neural networks in PyTorch)
+<!-- - [ignite](https://github.com/pytorch/ignite) (High-level library to help with training neural networks in PyTorch) -->
 
 # Table Of Contents
 -  [In a Nutshell](#in-a-nutshell)
@@ -18,7 +18,7 @@ In order to decrease repeated stuff, we recommend to use a high-level library. Y
 -  [Contributing](#contributing)
 -  [Acknowledgments](#acknowledgments)
 
-# In a Nutshell   
+<!-- # In a Nutshell   
 In a nutshell here's how to use this template, so **for example** assume you want to implement ResNet-18 to train mnist, so you should do the following:
 - In `modeling`  folder create a python file named whatever you like, here we named it `example_model.py` . In `modeling/__init__.py` file, you can build a function named `build_model` to call your model
 
@@ -72,7 +72,7 @@ optimizer = make_optimizer(cfg, model)
 do_train(cfg, model, train_loader, val_loader, optimizer, None, F.cross_entropy)
 ```
 
-**You will find a template file and a simple example in the model and trainer folder that shows you how to try your first model simply.**
+**You will find a template file and a simple example in the model and trainer folder that shows you how to try your first model simply.** -->
 
 
 # In Details
@@ -139,9 +139,9 @@ Any kind of enhancement or contribution is welcomed.
 
 # Scope of Work
 
-- Dataloader for Parcel Data
-- Training Engine
-- Inference Engine
-- Multi GPU support
-- Custom Modelling
-- Custom dataset size
+- Dataloader for Parcel Data    - Done
+- Training Engine               - WIP
+- Inference Engine              - TODO
+- Multi GPU support             - TODO
+- Custom Modelling              - Done
+- Custom dataset size           - TODO

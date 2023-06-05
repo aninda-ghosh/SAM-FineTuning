@@ -33,7 +33,7 @@ class ParcelDataset(Dataset):
         """
         self.path = path
         # Read the merged parcel data geo json file, This contains the parcel id and the geometry of all the parcels
-        self.data = gpd.read_file(self.path + "merger_parcel_data.geojson")
+        self.data = gpd.read_file(self.path + "parcel_data.geojson")
         # Get the image paths, pixel masks and labels
         self.data = self._get_image_prompts_labels(self.data)
         
@@ -55,16 +55,23 @@ class ParcelDataset(Dataset):
             np.array: List of pixel masks.
         """
         # TODO: Need to fix this function to return single image, bbox prompt, point prompt and pixel mask            
-        image_path = self.data[0][idx]
+        image_path = self.data[idx][0]
         # Read the image    
         image = cv2.imread(image_path)
         image = np.array(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-        bbox_prompts = self.data[1][idx]
-        point_prompts = self.data[2][idx]
-        labels = self.data[3][idx]
+        bbox_prompts = self.data[idx][1]
+        point_prompts = self.data[idx][2]
+        labels = self.data[idx][3]
 
-        return image, bbox_prompts, point_prompts, labels
+        data = {
+            "image": image,
+            "bbox_prompts": bbox_prompts,
+            "point_prompts": point_prompts,
+            "labels": labels,
+        }
+
+        return data
 
     def _convert_polygons_to_pixels(self, parcel_geometry, polygon_labels, size):
         # Create a black background

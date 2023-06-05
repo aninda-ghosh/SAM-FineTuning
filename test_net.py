@@ -14,7 +14,7 @@ import torch
 sys.path.append('.')
 from config import cfg
 from data import make_data_loader
-from engine.example_inference import inference
+from engine.sam_inference import inference
 from modeling import build_model
 from utils.logger import setup_logger
 
