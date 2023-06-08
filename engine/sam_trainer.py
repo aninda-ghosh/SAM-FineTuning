@@ -37,32 +37,33 @@ def do_train(
         epoch_loss = []
         progress_bar = tqdm(train_loader, total=len(train_loader))
 
-        for data in progress_bar:
-            #print(data)
-            image = data["image"].to(device)
-            bbox_prompts = data["bbox_prompts"].to(device)
-            point_prompts = data["point_prompts"].to(device)
-            labels = data["labels"].to(device)
+        for batch in progress_bar:
+            for item in batch:
+                # print(data)
+                image =  torch.as_tensor(item["image"], device=device)
+                bbox_prompts =  torch.as_tensor(item["bbox_prompts"], device=device)
+                point_prompts =  torch.as_tensor(item["point_prompts"], device=device)
+                labels = torch.as_tensor(item["labels"], device=device)
 
-            # Get the single mask prediction
-            with torch.inference_mode():
-                image_embeddings = model.image_encoder(image)  # (B,256,64,64)
+                # Get the single mask prediction based on all the relevant boxes and masks
+                with torch.inference_mode():
+                    image_embeddings = model.image_encoder(image)  # (B,256,64,64)
 
-                sparse_embeddings, dense_embeddings = model.prompt_encoder(
-                    points=point_prompts,
-                    boxes=bbox_prompts,
-                    masks=None,
-                )
+                    sparse_embeddings, dense_embeddings = model.prompt_encoder(
+                        points=point_prompts,
+                        boxes=bbox_prompts,
+                        masks=None,
+                    )
 
-            # mask_predictions, _ = model.mask_decoder(
-            #     image_embeddings=image_embeddings.to(device),  # (B, 256, 64, 64)
-            #     image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
-            #     sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
-            #     dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
-            #     multimask_output=False,
-            # )
+                # mask_predictions, _ = model.mask_decoder(
+                #     image_embeddings=image_embeddings.to(device),  # (B, 256, 64, 64)
+                #     image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
+                #     sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
+                #     dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
+                #     multimask_output=False,
+                # )
 
-            pass
+                pass
 
 
 
