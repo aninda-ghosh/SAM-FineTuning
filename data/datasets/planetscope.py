@@ -34,8 +34,11 @@ class ParcelDataset(Dataset):
         self.path = path
         # Read the merged parcel data geo json file, This contains the parcel id and the geometry of all the parcels
         self.data = gpd.read_file(self.path + "parcel_data.geojson")
-        # Get the image paths, pixel masks and labels
-        self.data = self._get_image_prompts_labels(self.data)
+        # Get the image paths and corresponding pixel mask arrays
+        self.data = self._get_image_pixel_masks(parcel_data=self.data, size=(672, 672))     #! Specify the image size which the model can expect
+        
+        self.image_size = None
+        self.scale_factor = 1.0 # By default the scale factor is 1.0, which means the image is not scaled
         
         self.length = len(self.data)
         
@@ -49,38 +52,30 @@ class ParcelDataset(Dataset):
         Args: idx (list): List of indexes.
 
         Returns:
-            np.array: Image as data
-            np.array: List of box prompts.
-            np.array: List of point prompts.
-            np.array: List of pixel masks.
+            Image as data
+            List of pixel masks
+            Image size (height, width)
+            Scale factor (Float) 
         """
-        # TODO: Need to fix this function to return single image, bbox prompt, point prompt and pixel mask            
-        image_path = self.data[idx][0]
-        # Read the image    
+
+        # Read the image from the path
+        image_path = self.data[idx][0]    
         image = cv2.imread(image_path)
-        image = np.array(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        
+        self.image_size = image.shape[:2]
+        self.scale_factor = 1024/max(self.image_size)   #! This is the scale factor used to scale the image to 1024x1024
 
-        bbox_prompts = self.data[idx][1]
-        point_prompts = self.data[idx][2]
-        labels = self.data[idx][3]
+        # Ground truth masks
+        gt_masks = self.data[idx][1]
 
+        # These metadata are used for the model
         data = {
-            "image": image,
-            "bbox_prompts": bbox_prompts,
-            "point_prompts": point_prompts,
-            "labels": labels,
+            "image": image,                     #The image will be scaled before being passed to the model in the engine
+            "gt_masks": gt_masks,               #The masks will be scaled before being passed to the model in the engine
+            "image_size": self.image_size,      #This is the original image size
+            "scale_factor": self.scale_factor   #This is the scale factor used to scale the image to 1024x1024
         }
-
         return data
-    
-    def _build_point_grid(n_per_side: int) -> np.ndarray:
-        """Generates a 2D grid of points evenly spaced in [0,1]x[0,1]."""
-        offset = 1 / (2 * n_per_side)
-        points_one_side = np.linspace(offset, 1 - offset, n_per_side)
-        points_x = np.tile(points_one_side[None, :], (n_per_side, 1))
-        points_y = np.tile(points_one_side[:, None], (1, n_per_side))
-        points = np.stack([points_x, points_y], axis=-1).reshape(-1, 2)
-        return points
 
     def _convert_polygons_to_pixels(self, parcel_geometry, polygon_labels, size):
         # Create a black background
@@ -125,38 +120,11 @@ class ParcelDataset(Dataset):
         # Return the pixel masks as a numpy array
         return np.array(pixel_masks)    
 
-    def _get_bbox_and_point_prompts(self, pixel_masks):
-        bbox_prompts = []
-        point_prompts = []
-        for mask in pixel_masks:
-            # get bounding box from mask
-            y_indices, x_indices = np.where(mask > 0)
-            x_min, x_max = np.min(x_indices), np.max(x_indices)
-            y_min, y_max = np.min(y_indices), np.max(y_indices)
-            # add perturbation to bounding box coordinates
-            H, W = mask.shape
-            x_min = max(0, x_min - np.random.randint(0, 20))
-            x_max = min(W, x_max + np.random.randint(0, 20))
-            y_min = max(0, y_min - np.random.randint(0, 20))
-            y_max = min(H, y_max + np.random.randint(0, 20))
-            bbox = [x_min, y_min, x_max, y_max]
-            bbox_prompts.append(bbox)
-
-            # Get grid points within the bounding box
-            grid_points = self._build_point_grid(10)
-
-            #This forms a 2D grid points and we need to normalize it to the bbox size
-            grid_points[:, 0] = point_prompts[:, 0] * (x_max - x_min) + x_min
-            grid_points[:, 1] = point_prompts[:, 1] * (y_max - y_min) + y_min
-
-            point_prompts.append(grid_points)
-
-        return bbox_prompts, point_prompts
-
-    def _get_image_prompts_labels(self, parcel_data, size=(448, 448)):
+    def _get_image_pixel_masks(self, parcel_data, size):
         """Convert the polygon masks to pixel masks
         Note:
-            Refrain from sending image sizes more than 1000x1000. This can cause some issues with SAM image encoder.
+            Refrain from sending image sizes more than 1024x1024. This can cause some issues with SAM image encoder.
+            The engine has is not tested for images more than 1024x1024.
         Args:
             parcel_data (geopandas.GeoDataFrame): GeoDataFrame containing the parcel data.
 
@@ -178,14 +146,12 @@ class ParcelDataset(Dataset):
             # If the parcel has no labels, let's keep it with no labels and no prompts
             if len(polygon_mask_list) == 0:
                 # Store the image path based on the current geoJSON file name only if the parcel has labels
-                processed_data.append((self.path + parcel_id + '.png', [], [], []))
+                # processed_data.append((self.path + parcel_id + '.png', [], [], [], []))
                 continue
             
             # Get the pixel masks for the parcel
             pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)
             # Get the bounding boxes and point prompts for the parcel
-            bounding_boxes, point_prompts = self._get_bbox_and_point_prompts(pixel_masks)
-
-            processed_data.append((self.path + parcel_id + '.png', bounding_boxes, point_prompts, pixel_masks))
+            processed_data.append((self.path + parcel_id + '.png', pixel_masks))
 
         return processed_data

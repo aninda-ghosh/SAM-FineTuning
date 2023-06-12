@@ -13,6 +13,80 @@ from ignite.metrics import Accuracy, Loss, RunningAverage
 from tqdm import tqdm
 import torch
 
+import numpy as np
+from modeling.segment_anything.utils.transforms import ResizeLongestSide
+import torch.nn.functional as F
+
+def _build_point_grid(n_per_side: int) -> np.ndarray:
+    """Generates a 2D grid of points evenly spaced in [0,1]x[0,1]."""
+    offset = 1 / (2 * n_per_side)
+    points_one_side = np.linspace(offset, 1 - offset, n_per_side)
+    points_x = np.tile(points_one_side[None, :], (n_per_side, 1))
+    points_y = np.tile(points_one_side[:, None], (1, n_per_side))
+    points = np.stack([points_x, points_y], axis=-1).reshape(-1, 2)
+    return points
+
+def _get_bbox_point_and_inputlabel_prompts(pixel_masks):
+    bbox_prompts = []
+    point_prompts = []
+    input_labels_prompts = []
+    for mask in pixel_masks:
+        # get bounding box from mask
+        y_indices, x_indices = np.where(mask > 0)
+        x_min, x_max = np.min(x_indices), np.max(x_indices)
+        y_min, y_max = np.min(y_indices), np.max(y_indices)
+        # add perturbation to bounding box coordinates
+        H, W = mask.shape
+        x_min = max(0, x_min - np.random.randint(0, 20))
+        x_max = min(W, x_max + np.random.randint(0, 20))
+        y_min = max(0, y_min - np.random.randint(0, 20))
+        y_max = min(H, y_max + np.random.randint(0, 20))
+        bbox = [x_min, y_min, x_max, y_max]
+        bbox_prompts.append(bbox)
+
+        # Get grid points within the bounding box
+        point_grid_per_crop= _build_point_grid(10)
+
+        #This forms a 2D grid points and we need to normalize it to the bbox size
+        point_grid_per_crop[:, 0] = point_grid_per_crop[:, 0] * (x_max - x_min) + x_min
+        point_grid_per_crop[:, 1] = point_grid_per_crop[:, 1] * (y_max - y_min) + y_min
+
+        #Convert the grid points to a integer
+        point_grid_per_crop = np.around(point_grid_per_crop).astype(np.float64)
+
+        points_per_crop = np.array([np.array([point_grid_per_crop])])
+        points_per_crop = np.transpose(points_per_crop, axes=(0, 2, 1, 3))
+
+        point_prompts.append(points_per_crop)
+
+        input_labels = np.ones_like(points_per_crop[:, :, :, 0], dtype=np.int64)
+
+        input_labels_prompts.append(input_labels)
+
+    return bbox_prompts, point_prompts, input_labels_prompts
+
+def _post_process_masks_pt(masks, original_sizes, reshaped_input_sizes, mask_threshold=0.0, binarize=True, pad_size=None):
+        target_image_size = (1024, 1024)
+        if isinstance(original_sizes, (torch.Tensor, np.ndarray)):
+            original_sizes = original_sizes.tolist()
+        if isinstance(reshaped_input_sizes, (torch.Tensor, np.ndarray)):
+            reshaped_input_sizes = reshaped_input_sizes.tolist()
+        output_masks = []
+        for i, original_size in enumerate(original_sizes):
+            if isinstance(masks[i], np.ndarray):
+                masks[i] = torch.from_numpy(masks[i])
+            elif not isinstance(masks[i], torch.Tensor):
+                raise ValueError("Input masks should be a list of `torch.tensors` or a list of `np.ndarray`")
+            interpolated_mask = F.interpolate(masks[i], target_image_size, mode="bilinear", align_corners=False)
+            interpolated_mask = interpolated_mask[..., : reshaped_input_sizes[i][0], : reshaped_input_sizes[i][1]]
+            interpolated_mask = F.interpolate(interpolated_mask, original_size, mode="bilinear", align_corners=False)
+            if binarize:
+                interpolated_mask = interpolated_mask > mask_threshold
+            output_masks.append(interpolated_mask)
+
+        return output_masks
+
+
 def do_train(
         cfg,
         model,
@@ -39,31 +113,63 @@ def do_train(
 
         for batch in progress_bar:
             for item in batch:
-                # print(data)
-                image =  torch.as_tensor(item["image"], device=device)
-                bbox_prompts =  torch.as_tensor(item["bbox_prompts"], device=device)
-                point_prompts =  torch.as_tensor(item["point_prompts"], device=device)
-                labels = torch.as_tensor(item["labels"], device=device)
 
-                # Get the single mask prediction based on all the relevant boxes and masks
+                image =  item["image"]
+                pixel_masks = item["gt_masks"]
+                scale_factor = item["scale_factor"]
+                original_image_size = item["image_size"]
+                
+                # TODO: Image needs to be resized to 1024*1024 and necessary preprocessing should be done
+                sam_transform = ResizeLongestSide(model.image_encoder.img_size)
+                resize_img = sam_transform.apply_image(image)
+                resize_img_tensor = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(device)
+                image = model.preprocess(resize_img_tensor[None,:,:,:]) # (1, 3, 1024, 1024)
+
+                # TODO: Get the bbox, point prompts and input labels and transform accordingly
+                bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks)
+                #scale the bbox prompts and point prompts according to the scale factor
+                bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
+                point_prompts = np.around(np.array(point_prompts) * scale_factor)
+
+                bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
+            
+
+                # TODO: Obtain the image embeddings from the image encoder, image encoder here is run with inference mode (Strict version of no grad)
+                # This will be done only once
                 with torch.inference_mode():
                     image_embeddings = model.image_encoder(image)  # (B,256,64,64)
 
+                # TODO: Obtain the sparse and dense embeddings from the prompt encoder, prompt encoder here is run with inference mode (Strict version of no grad)
+                # if points are provided then providing labels are mandatory
+                # This will repeat mutiple times and for all the masks we will calculate the losses
+                with torch.inference_mode():
                     sparse_embeddings, dense_embeddings = model.prompt_encoder(
-                        points=point_prompts,
+                        points=None,
                         boxes=bbox_prompts,
                         masks=None,
                     )
+                
+                with torch.inference_mode():    #Just keeping it here to reduce memory consumption in the GPU
+                    low_res_masks, iou_predictions = model.mask_decoder(
+                        image_embeddings=image_embeddings.to(device),  # (B, 256, 64, 64)
+                        image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
+                        sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
+                        dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
+                        multimask_output=False,
+                    )
 
-                # mask_predictions, _ = model.mask_decoder(
-                #     image_embeddings=image_embeddings.to(device),  # (B, 256, 64, 64)
-                #     image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
-                #     sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
-                #     dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
-                #     multimask_output=False,
-                # )
+                # TODO: Postprocess and retrieve the predicted mask as a binary mask
+                high_res_masks = _post_process_masks_pt(masks = low_res_masks, original_sizes = np.array([original_image_size]), reshaped_input_sizes = np.array([[1024, 1024]]), mask_threshold=0.0, binarize=True, pad_size=None)
 
-                pass
+                print(high_res_masks)
+
+                # delete all the local variables and cuda cache
+                del image_embeddings, sparse_embeddings, dense_embeddings
+                del image, pixel_masks, scale_factor, original_image_size
+                del bbox_prompts, point_prompts, input_labels_prompts
+                del resize_img, resize_img_tensor
+                del low_res_masks, iou_predictions
+                torch.cuda.empty_cache()
 
 
 

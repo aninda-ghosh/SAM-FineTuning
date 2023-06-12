@@ -5,5 +5,5 @@ __pycache__
 .pypirc
 dist
 torchlib.egg-info
-modelling/model_checkpoints/*.pt
-modelling/model_checkpoints/*.pth
+modeling/model_checkpoints/*.pt
+modeling/model_checkpoints/*.pth
