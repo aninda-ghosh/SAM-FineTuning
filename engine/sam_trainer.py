@@ -14,6 +14,7 @@ from tqdm import tqdm
 import torch
 
 import numpy as np
+import matplotlib.pyplot as plt
 from modeling.segment_anything.utils.transforms import ResizeLongestSide
 import torch.nn.functional as F
 
@@ -65,26 +66,16 @@ def _get_bbox_point_and_inputlabel_prompts(pixel_masks):
 
     return bbox_prompts, point_prompts, input_labels_prompts
 
-def _post_process_masks_pt(masks, original_sizes, reshaped_input_sizes, mask_threshold=0.0, binarize=True, pad_size=None):
+def _post_process_masks_pt(masks, original_size, reshaped_input_sizes, mask_threshold=0.0, binarize=True, pad_size=None):
         target_image_size = (1024, 1024)
-        if isinstance(original_sizes, (torch.Tensor, np.ndarray)):
-            original_sizes = original_sizes.tolist()
-        if isinstance(reshaped_input_sizes, (torch.Tensor, np.ndarray)):
-            reshaped_input_sizes = reshaped_input_sizes.tolist()
-        output_masks = []
-        for i, original_size in enumerate(original_sizes):
-            if isinstance(masks[i], np.ndarray):
-                masks[i] = torch.from_numpy(masks[i])
-            elif not isinstance(masks[i], torch.Tensor):
-                raise ValueError("Input masks should be a list of `torch.tensors` or a list of `np.ndarray`")
-            interpolated_mask = F.interpolate(masks[i], target_image_size, mode="bilinear", align_corners=False)
-            interpolated_mask = interpolated_mask[..., : reshaped_input_sizes[i][0], : reshaped_input_sizes[i][1]]
-            interpolated_mask = F.interpolate(interpolated_mask, original_size, mode="bilinear", align_corners=False)
-            if binarize:
-                interpolated_mask = interpolated_mask > mask_threshold
-            output_masks.append(interpolated_mask)
-
-        return output_masks
+        
+        interpolated_masks = F.interpolate(masks, target_image_size, mode="bilinear", align_corners=False)
+        interpolated_masks = interpolated_masks[..., : reshaped_input_sizes[0], : reshaped_input_sizes[1]]
+        interpolated_masks = F.interpolate(interpolated_masks, original_size, mode="bilinear", align_corners=False)
+        if binarize:
+            interpolated_masks = interpolated_masks > mask_threshold
+        
+        return interpolated_masks
 
 
 def do_train(
@@ -122,8 +113,8 @@ def do_train(
                 # TODO: Image needs to be resized to 1024*1024 and necessary preprocessing should be done
                 sam_transform = ResizeLongestSide(model.image_encoder.img_size)
                 resize_img = sam_transform.apply_image(image)
-                resize_img_tensor = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(device)
-                image = model.preprocess(resize_img_tensor[None,:,:,:]) # (1, 3, 1024, 1024)
+                resize_img = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(device)
+                resize_img = model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
 
                 # TODO: Get the bbox, point prompts and input labels and transform accordingly
                 bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks)
@@ -137,7 +128,7 @@ def do_train(
                 # TODO: Obtain the image embeddings from the image encoder, image encoder here is run with inference mode (Strict version of no grad)
                 # This will be done only once
                 with torch.inference_mode():
-                    image_embeddings = model.image_encoder(image)  # (B,256,64,64)
+                    image_embeddings = model.image_encoder(resize_img)  # (B,256,64,64)
 
                 # TODO: Obtain the sparse and dense embeddings from the prompt encoder, prompt encoder here is run with inference mode (Strict version of no grad)
                 # if points are provided then providing labels are mandatory
@@ -159,15 +150,26 @@ def do_train(
                     )
 
                 # TODO: Postprocess and retrieve the predicted mask as a binary mask
-                high_res_masks = _post_process_masks_pt(masks = low_res_masks, original_sizes = np.array([original_image_size]), reshaped_input_sizes = np.array([[1024, 1024]]), mask_threshold=0.0, binarize=True, pad_size=None)
+                high_res_masks = np.squeeze(_post_process_masks_pt(masks = low_res_masks, original_size = original_image_size, reshaped_input_sizes = [1024, 1024], mask_threshold=0.0, binarize=True, pad_size=None))
+                
+                # Plot the masks and the image (Only For Visualization Purposes)
+                # for i in range(len(high_res_masks)):
+                #     fig, ax = plt.subplots(1, 3)
+                #     ax[0].imshow(image)
+                #     ax[0].set_title("Original Image")
+                #     ax[1].imshow(high_res_masks[i].cpu())
+                #     ax[1].set_title("Predicted Mask")
+                #     ax[2].imshow(pixel_masks[i])
+                #     ax[2].set_title("GT Mask")
+                #     plt.show()
 
-                print(high_res_masks)
+                # TODO: Calculate the loss between each instance of the mask and the predicted mask 
 
                 # delete all the local variables and cuda cache
                 del image_embeddings, sparse_embeddings, dense_embeddings
                 del image, pixel_masks, scale_factor, original_image_size
                 del bbox_prompts, point_prompts, input_labels_prompts
-                del resize_img, resize_img_tensor
+                del resize_img
                 del low_res_masks, iou_predictions
                 torch.cuda.empty_cache()
 
