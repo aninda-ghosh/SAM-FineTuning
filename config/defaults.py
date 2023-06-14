@@ -71,6 +71,11 @@ _C.VALID.ITEMS_PER_BATCH = 2
 _C.TEST = CN()
 _C.TEST.ITEMS_PER_BATCH = 2
 
+# Loss function parameters
+_C.LOSS = CN()
+_C.LOSS.FOCAL_LOSS_WEIGHT = 20
+_C.LOSS.DICE_LOSS_WEIGHT = 1
+
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #
