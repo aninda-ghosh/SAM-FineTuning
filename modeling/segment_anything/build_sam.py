@@ -97,7 +97,6 @@ def _build_sam(
         pixel_mean=[123.675, 116.28, 103.53],
         pixel_std=[58.395, 57.12, 57.375],
     )
-    sam.eval()
 
     # Load the checkpoint if we want to fine-tune
     with open(checkpoint, "rb") as f:

@@ -31,7 +31,7 @@ _C.INPUT = CN()
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
 # Root directory of dataset
-_C.DATASETS.ROOT_DIR = "/home/legion-ubuntu/Research/Kerner-Lab/datasets/images2/"
+_C.DATASETS.ROOT_DIR = "/home/legion-ubuntu/Research/Kerner-Lab/datasets/images2_small/"
 
 # -----------------------------------------------------------------------------
 # DataLoader
@@ -56,8 +56,8 @@ _C.DATALOADER.TEST_DATA = 0.2  # 20% of the batched data for testing
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.SOLVER = CN()
-_C.SOLVER.MAX_EPOCHS = 5
-_C.SOLVER.ITEMS_PER_BATCH = 4
+_C.SOLVER.MAX_EPOCHS = 1
+_C.SOLVER.ITEMS_PER_BATCH = 2
 _C.SOLVER.BASE_LR = 0.01
 _C.SOLVER.WEIGHT_DECAY = 0.001
 

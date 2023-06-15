@@ -25,7 +25,7 @@ def build_optimizer(cfg, model):
 
     # Using Adam optimizer for SAM Model
     optimizer = torch.optim.Adam(
-        model.mask_decoder.parameters(), 
+        model.prompt_encoder.parameters(), 
         lr=cfg.SOLVER.BASE_LR, 
         weight_decay=cfg.SOLVER.WEIGHT_DECAY
     )
