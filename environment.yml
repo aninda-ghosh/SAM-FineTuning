@@ -199,4 +199,4 @@ dependencies:
       - pyproj==3.5.0
       - shapely==2.0.1
       - tzdata==2023.3
-prefix: /home/legion-ubuntu/miniconda3/envs/sam
+# prefix: /home/legion-ubuntu/miniconda3/envs/sam

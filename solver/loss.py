@@ -21,8 +21,8 @@ class FocalLoss(nn.Module):
         smooth=1e-6   # Used to prevent division by zero.
 
         #flatten label and prediction tensors
-        inputs = inputs.float().view(-1)
-        targets = targets.float().view(-1)
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
 
         BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
         BCE_EXP = torch.exp(-BCE)
@@ -40,8 +40,8 @@ class DiceLoss(nn.Module):
         smooth=1e-6   # Used to prevent division by zero.
 
         #flatten label and prediction tensors
-        inputs = inputs.float().view(-1)
-        targets = targets.float().view(-1)
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
 
         intersection = (inputs * targets).sum()
         dice = (2. * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
@@ -61,11 +61,10 @@ class IoULoss(nn.Module):
         inputs = inputs.view(-1)
         targets = targets.view(-1)
         
-        intersection = (inputs & targets).float().sum()  # Will be zero if Truth=0 or Prediction=0
-        union = (inputs | targets).float().sum()         # Will be zzero if both are 0
+        intersection = (inputs * targets).sum()
+        union = inputs.sum() + targets.sum() - intersection
+        iou = (intersection + smooth) / (union + smooth)
         
-        iou = (intersection + smooth) / (union + smooth)  # We smooth our devision to avoid 0/0
-
         loss = iou - pred_iou
 
         return loss

@@ -14,8 +14,6 @@ import torch.nn.functional as F
 sys.path.append('.')
 from config import cfg
 
-# from engine.sam_trainer import do_train
-
 from data.build import SAM_Dataloader
 from modeling.segment_anything import prepare_sam
 from solver.optimizer import build_optimizer
@@ -25,6 +23,7 @@ from solver.loss import FocalLoss, DiceLoss
 from utils.logger import setup_logger
 
 from config import cfg  # Import the default config file
+import gc
 
 from tqdm import tqdm
 import torch
@@ -33,6 +32,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modeling.segment_anything.utils.transforms import ResizeLongestSide
 import torch.nn.functional as F
+from torch.nn.functional import threshold, normalize
 
 from solver.loss import FocalLoss, DiceLoss, IoULoss
 
@@ -57,45 +57,28 @@ def _get_bbox_point_and_inputlabel_prompts(pixel_masks):
         y_min, y_max = np.min(y_indices), np.max(y_indices)
         # add perturbation to bounding box coordinates
         H, W = mask.shape
-        x_min = max(0, x_min - np.random.randint(0, 100))
-        x_max = min(W, x_max + np.random.randint(0, 100))
-        y_min = max(0, y_min - np.random.randint(0, 100))
-        y_max = min(H, y_max + np.random.randint(0, 100))
+        x_min = max(0, x_min - np.random.randint(0, 30))
+        x_max = min(W, x_max + np.random.randint(0, 30))
+        y_min = max(0, y_min - np.random.randint(0, 30))
+        y_max = min(H, y_max + np.random.randint(0, 30))
         bbox = [x_min, y_min, x_max, y_max]
         bbox_prompts.append(bbox)
 
         # Get grid points within the bounding box
         point_grid_per_crop= _build_point_grid(10)
-
         #This forms a 2D grid points and we need to normalize it to the bbox size
         point_grid_per_crop[:, 0] = point_grid_per_crop[:, 0] * (x_max - x_min) + x_min
         point_grid_per_crop[:, 1] = point_grid_per_crop[:, 1] * (y_max - y_min) + y_min
-
         #Convert the grid points to a integer
         point_grid_per_crop = np.around(point_grid_per_crop).astype(np.float64)
-
         points_per_crop = np.array([np.array([point_grid_per_crop])])
         points_per_crop = np.transpose(points_per_crop, axes=(0, 2, 1, 3))
-
         point_prompts.append(points_per_crop)
 
         input_labels = np.ones_like(points_per_crop[:, :, :, 0], dtype=np.int64)
-
         input_labels_prompts.append(input_labels)
 
     return bbox_prompts, point_prompts, input_labels_prompts
-
-def _post_process_masks_pt(masks, original_size, reshaped_input_sizes, mask_threshold=0.0, binarize=True, pad_size=None):
-    target_image_size = (1024, 1024)
-    
-    interpolated_masks = F.interpolate(masks, target_image_size, mode="bilinear", align_corners=False)
-    interpolated_masks = interpolated_masks[..., : reshaped_input_sizes[0], : reshaped_input_sizes[1]]
-    interpolated_masks = F.interpolate(interpolated_masks, original_size, mode="bilinear", align_corners=False)
-    if binarize:
-        interpolated_masks = interpolated_masks > mask_threshold
-    
-    return interpolated_masks
-
 
 
 
@@ -108,7 +91,7 @@ def train(cfg):
 
     #Set the portion of the model to be trained (We will train only the mask_decoder part)
     for name, param in model.named_parameters():
-        if name.startswith('image_encoder') or name.startswith('mask_decoder'):
+        if name.startswith('image_encoder') or name.startswith('prompt_encoder'):
             param.requires_grad = False
     
     # Get the dataloader and prepare the train, validation and test dataloader
@@ -117,7 +100,7 @@ def train(cfg):
 
     # Get the optimizer and scheduler
     optimizer = build_optimizer(cfg, model)
-    scheduler = build_lrSchedular(cfg=None, optimizer=optimizer)
+    scheduler = build_lrSchedular(cfg=cfg, optimizer=optimizer)
 
     Focal_Loss = FocalLoss()
     Dice_Loss = DiceLoss()
@@ -125,12 +108,24 @@ def train(cfg):
 
     #Put the model in the train mode
     model.to(device)    # Put the model on GPU
-    model.train()       # Set the model to training mode
 
-    epochs_loss = []
-    for epoch in range(cfg.SOLVER.MAX_EPOCHS):
+    training_losses = []
+    validation_losses = []
+    for epoch in range(1, cfg.SOLVER.MAX_EPOCHS+1):
+        epoch_loss = 0
+
+        # Set the model to training mode
+        model.train()       
         # Iterate over the batches and acculmulate the loss for each batch and update the model
         for batch in tqdm(train_loader, total=len(train_loader)):
+            instances = 0
+            focal_loss = 0
+            dice_loss = 0
+            iou_loss = 0
+            
+            # Zero the gradients for the optimizer
+            optimizer.zero_grad()
+
             # This is one item(image) in the batch, here we will calculate the loss for each image and each mask in the image
             for item in batch:
                 
@@ -152,37 +147,45 @@ def train(cfg):
                 point_prompts = np.around(np.array(point_prompts) * scale_factor)
 
                 bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
+
+                # limit the number of prompts to 30
+                if len(bbox_prompts) > 30:
+                    bbox_prompts = bbox_prompts[:30]
+                    point_prompts = point_prompts[:30]
+                    input_labels_prompts = input_labels_prompts[:30]
             
 
-                # Obtain the image embeddings from the image encoder, image encoder here is run with inference mode (Strict version of no grad)
-                # This will be done only once
                 with torch.no_grad():
+                    # Obtain the image embeddings from the image encoder, image encoder here is run with inference mode (Strict version of no grad)
+                    # This will be done only once
                     image_embeddings = model.image_encoder(resize_img)  # (B,256,64,64)
                     #TODO: Store the image embeddings in torch cache for later use
                      
 
-                # Obtain the sparse and dense embeddings from the prompt encoder, prompt encoder here is run with inference mode (Strict version of no grad)
-                # if points are provided then providing labels are mandatory
-                # This will repeat mutiple times and for all the masks we will calculate the losses
-                # with torch.inference_mode():
-                sparse_embeddings, dense_embeddings = model.prompt_encoder(
-                    points=None,
-                    boxes=bbox_prompts,
-                    masks=None,
-                )
-                
-                with torch.no_grad():    #Just keeping it here to reduce memory consumption in the GPU
-                    low_res_masks, iou_predictions = model.mask_decoder(
-                        image_embeddings=image_embeddings.to(device),  # (B, 256, 64, 64)
-                        image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
-                        sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
-                        dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
-                        multimask_output=False,
+                    # Obtain the sparse and dense embeddings from the prompt encoder, prompt encoder here is run with inference mode (Strict version of no grad)
+                    # if points are provided then providing labels are mandatory
+                    # This will repeat mutiple times and for all the masks we will calculate the losses
+                    sparse_embeddings, dense_embeddings = model.prompt_encoder(
+                        points=None,
+                        boxes=bbox_prompts,
+                        masks=None,
                     )
+                
+                # Run the mask decoder with the image embeddings, sparse embeddings and dense embeddings
+                low_res_masks, iou_predictions = model.mask_decoder(
+                    image_embeddings=image_embeddings.to(device),  # (B, 256, 64, 64)
+                    image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
+                    sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
+                    dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
+                    multimask_output=False,
+                )
 
                 # Postprocess and retrieve the predicted mask as a binary mask
-                high_res_masks = np.squeeze(_post_process_masks_pt(masks = low_res_masks, original_size = original_image_size, reshaped_input_sizes = [1024, 1024], mask_threshold=0.0, binarize=True, pad_size=None))
+                # high_res_masks = np.squeeze(_post_process_masks_pt(masks = low_res_masks, original_size = original_image_size, reshaped_input_sizes = [1024, 1024], mask_threshold=0.0, binarize=False, pad_size=None))
                 
+                upscaled_masks = model.postprocess_masks(low_res_masks, (1024, 1024), original_image_size).to(device)
+                high_res_masks = normalize(threshold(upscaled_masks, 0.0, 0)).to(device).float()
+
                 # Plot the masks and the image (Only For Visualization Purposes)
                 # for i in range(len(high_res_masks)):
                 #     fig, ax = plt.subplots(1, 3)
@@ -195,37 +198,40 @@ def train(cfg):
                 #     plt.show()
 
                 # TODO: Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss
-                high_res_masks = torch.as_tensor(high_res_masks).to(device)
-                pixel_masks = torch.as_tensor(pixel_masks).to(device)
-                
-                instances = 0
-                focal_loss = 0
-                dice_loss = 0
-                iou_loss = 0
+                pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
+
                 for i in range(len(high_res_masks)):
                     focal_loss += Focal_Loss(high_res_masks[i], pixel_masks[i])
                     dice_loss += Dice_Loss(high_res_masks[i], pixel_masks[i])
                     iou_loss += Iou_Loss(high_res_masks[i], pixel_masks[i], iou_predictions[i][0].to(device))
                     instances += 1
                 
-                focal_loss = (focal_loss/instances) 
-                dice_loss = (dice_loss/instances)   
-                iou_loss = (iou_loss/instances)
-                
-                # delete all the local variables and cuda cache after each image is processed, only leave the global loss variable that can be deleted after one batch is processed
-                # del image, pixel_masks, scale_factor, original_image_size, sam_transform, resize_img, bbox_prompts, point_prompts, input_labels_prompts, image_embeddings, sparse_embeddings, dense_embeddings, low_res_masks, iou_predictions, high_res_masks
-                
-                #torch.cuda.empty_cache()
-
-                
-
-                # TODO: Update the model with the loss
-                optimizer.zero_grad()
-                loss = (cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
-                loss.backward()
-                optimizer.step()
             
+                # delete all the local variables and cuda cache after each image is processed, only leave the global loss variable that can be deleted after one batch is processed
+                del image, pixel_masks, scale_factor, original_image_size, sam_transform, resize_img, bbox_prompts, point_prompts, input_labels_prompts, image_embeddings, sparse_embeddings, dense_embeddings, low_res_masks, iou_predictions, high_res_masks
+                
+            
+            # Update the model after each batch            
+            focal_loss = (focal_loss/instances) 
+            dice_loss = (dice_loss/instances)   
+            iou_loss = (iou_loss/instances)
 
+            # TODO: Update the model with the loss
+            loss = (cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
+            loss.backward()
+            optimizer.step()
+
+            torch.cuda.empty_cache()
+            gc.collect()
+        
+            epoch_loss += loss.item()
+
+        epoch_loss /= (epoch)
+
+        scheduler.step(metrics=epoch_loss)
+
+        losses.append(epoch_loss)
+        print(f'EPOCH: {epoch}, Loss: {epoch_loss}')
 
 
 

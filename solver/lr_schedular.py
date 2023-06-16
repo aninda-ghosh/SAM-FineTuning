@@ -8,7 +8,7 @@ import torch
 
 def build_lrSchedular(cfg, optimizer):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience=3, factor=0.01, verbose=False
+        optimizer, mode="min", patience=3, factor=0.01, verbose=False, min_lr=cfg.SOLVER.MIN_LR
     )
 
     return scheduler
