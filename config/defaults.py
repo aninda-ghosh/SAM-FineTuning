@@ -18,7 +18,7 @@ _C = CN()
 
 _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
-_C.MODEL.CHECKPOINT = "/home/aninda/projects/SAM-FineTuning/modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+_C.MODEL.CHECKPOINT = "/home/aninda/projects/SAM-FineTuning/modeling/model_checkpoints/sam_checkpoint_30.pth"
 
 # -----------------------------------------------------------------------------
 # INPUT

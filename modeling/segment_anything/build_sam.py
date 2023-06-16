@@ -107,7 +107,7 @@ def _build_sam(
 
 
 
-def prepare_sam(checkpoint=None):
+def prepare_sam(checkpoint=None, model_type="base"):
     """
     Prepare the SAM model for inference/training
 
@@ -125,10 +125,8 @@ def prepare_sam(checkpoint=None):
     if checkpoint is not None:
         # Download the checkpoint if it does not exist
         checkpoint = Path(checkpoint)
-        if checkpoint.name == "sam_vit_b_01ec64.pth":
+        if checkpoint.name == "sam_vit_b_01ec64.pth" and model_type == "base":
             if not checkpoint.exists():
-                # cmd = input("Download sam_vit_b_01ec64.pth from facebook AI? [y]/n: ")
-                # if len(cmd) == 0 or cmd.lower() == 'y':
                 checkpoint.parent.mkdir(parents=True, exist_ok=True)
                 print("Downloading SAM ViT-B checkpoint...")
                 urllib.request.urlretrieve(
@@ -137,10 +135,8 @@ def prepare_sam(checkpoint=None):
                 )
                 print(checkpoint.name, " is downloaded!")
             build_sam = build_sam_vit_b(checkpoint=checkpoint)
-        elif checkpoint.name == "sam_vit_h_4b8939.pth":
+        elif checkpoint.name == "sam_vit_h_4b8939.pth" and model_type == "huge":
             if not checkpoint.exists():
-                # cmd = input("Download sam_vit_h_4b8939.pth from facebook AI? [y]/n: ")
-                # if len(cmd) == 0 or cmd.lower() == 'y':
                 checkpoint.parent.mkdir(parents=True, exist_ok=True)
                 print("Downloading SAM ViT-H checkpoint...")
                 urllib.request.urlretrieve(
@@ -149,10 +145,8 @@ def prepare_sam(checkpoint=None):
                 )
                 print(checkpoint.name, " is downloaded!")
             build_sam = build_sam_vit_h(checkpoint=checkpoint)
-        elif checkpoint.name == "sam_vit_l_0b3195.pth": 
+        elif checkpoint.name == "sam_vit_l_0b3195.pth" and model_type == "large": 
             if not checkpoint.exists():
-                # cmd = input("Download sam_vit_l_0b3195.pth from facebook AI? [y]/n: ")
-                # if len(cmd) == 0 or cmd.lower() == 'y':
                 checkpoint.parent.mkdir(parents=True, exist_ok=True)
                 print("Downloading SAM ViT-L checkpoint...")
                 urllib.request.urlretrieve(
@@ -161,5 +155,12 @@ def prepare_sam(checkpoint=None):
                 )
                 print(checkpoint.name, " is downloaded!")
             build_sam = build_sam_vit_l(checkpoint=checkpoint)
+        else:
+            if model_type == "base":
+                build_sam = build_sam_vit_b(checkpoint=checkpoint)
+            elif model_type == "huge":
+                build_sam = build_sam_vit_h(checkpoint=checkpoint)
+            elif model_type == "large":
+                build_sam = build_sam_vit_l(checkpoint=checkpoint)
 
     return build_sam
