@@ -413,7 +413,13 @@ def validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss):
             #     plt.show()
 
             # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss
-            pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
+            if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
+                # generate boolean pixel masks with image original size, use False as the mask value
+                for i in range(len(high_res_masks)):
+                    pixel_masks.append(np.zeros((1, original_image_size[0], original_image_size[1])))
+                pixel_masks = torch.as_tensor(pixel_masks).to(device).float()
+            else:
+                pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
                 focal_loss += Focal_Loss(high_res_masks[i], pixel_masks[i])
@@ -525,7 +531,13 @@ def test(model, device, test_loader, Focal_Loss, Dice_Loss, Iou_Loss):
             #     plt.show()
 
             # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss
-            pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
+            if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
+                # generate boolean pixel masks with image original size, use False as the mask value
+                for i in range(len(high_res_masks)):
+                    pixel_masks.append(np.zeros((1, original_image_size[0], original_image_size[1])))
+                pixel_masks = torch.as_tensor(pixel_masks).to(device).float()
+            else:
+                pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
                 focal_loss += Focal_Loss(high_res_masks[i], pixel_masks[i])
