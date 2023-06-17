@@ -296,7 +296,7 @@ def train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Los
                 # generate boolean pixel masks with image original size, use False as the mask value
                 for i in range(len(high_res_masks)):
                     pixel_masks.append(np.zeros((1, original_image_size[0], original_image_size[1])))
-                pixel_masks = torch.as_tensor(pixel_masks).to(device).float()
+                pixel_masks = torch.as_tensor(np.array(pixel_masks)).to(device).float()
             else:
                 pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
 
@@ -417,7 +417,7 @@ def validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss):
                 # generate boolean pixel masks with image original size, use False as the mask value
                 for i in range(len(high_res_masks)):
                     pixel_masks.append(np.zeros((1, original_image_size[0], original_image_size[1])))
-                pixel_masks = torch.as_tensor(pixel_masks).to(device).float()
+                pixel_masks = torch.as_tensor(np.array(pixel_masks)).to(device).float()
             else:
                 pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
 
@@ -535,7 +535,7 @@ def test(model, device, test_loader, Focal_Loss, Dice_Loss, Iou_Loss):
                 # generate boolean pixel masks with image original size, use False as the mask value
                 for i in range(len(high_res_masks)):
                     pixel_masks.append(np.zeros((1, original_image_size[0], original_image_size[1])))
-                pixel_masks = torch.as_tensor(pixel_masks).to(device).float()
+                pixel_masks = torch.as_tensor(np.array(pixel_masks)).to(device).float()
             else:
                 pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
 
