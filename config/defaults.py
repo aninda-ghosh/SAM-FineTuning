@@ -39,6 +39,8 @@ _C.BBOX.NUMBER = 30
 _C.BBOX.MIN_DISTANCE = 50
 _C.BBOX.SIZE_REF = 0.25
 
+# This is used to control the per image masks instances to play with
+_C.BBOX.BOX_LIMITER = 100
 
 # -----------------------------------------------------------------------------
 # DataLoader

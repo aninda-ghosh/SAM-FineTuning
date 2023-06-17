@@ -241,11 +241,11 @@ def train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Los
 
             bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
 
-            # limit the number of prompts to 50, let's expect that we will have maximum 50 prompts for each image
-            if len(bbox_prompts) > 30:
-                bbox_prompts = bbox_prompts[:30]
-                point_prompts = point_prompts[:30]
-                input_labels_prompts = input_labels_prompts[:30]
+            # limit the number of prompts to the box limiter value
+            if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
+                bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
+                point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
+                input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
         
 
             with torch.no_grad():
@@ -363,11 +363,11 @@ def validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss):
 
             bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
 
-            # limit the number of prompts to 30
-            if len(bbox_prompts) > 30:
-                bbox_prompts = bbox_prompts[:30]
-                point_prompts = point_prompts[:30]
-                input_labels_prompts = input_labels_prompts[:30]
+            # limit the number of prompts to the box limiter value
+            if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
+                bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
+                point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
+                input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
         
 
             with torch.no_grad():
@@ -481,11 +481,11 @@ def test(model, device, test_loader, Focal_Loss, Dice_Loss, Iou_Loss):
 
             bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
 
-            # limit the number of prompts to 30
-            if len(bbox_prompts) > 30:
-                bbox_prompts = bbox_prompts[:30]
-                point_prompts = point_prompts[:30]
-                input_labels_prompts = input_labels_prompts[:30]
+            # limit the number of prompts to the box limiter value
+            if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
+                bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
+                point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
+                input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
         
 
             with torch.inference_mode():
