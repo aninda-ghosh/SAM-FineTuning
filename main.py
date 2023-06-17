@@ -234,7 +234,7 @@ def train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Los
             resize_img = model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
 
             # Get the bbox, point prompts and input labels and transform accordingly
-            bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size, original_image_size, cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
             #scale the bbox prompts and point prompts according to the scale factor
             bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
             point_prompts = np.around(np.array(point_prompts) * scale_factor)
@@ -242,10 +242,10 @@ def train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Los
             bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
 
             # limit the number of prompts to 50, let's expect that we will have maximum 50 prompts for each image
-            if len(bbox_prompts) > 50:
-                bbox_prompts = bbox_prompts[:50]
-                point_prompts = point_prompts[:50]
-                input_labels_prompts = input_labels_prompts[:50]
+            if len(bbox_prompts) > 30:
+                bbox_prompts = bbox_prompts[:30]
+                point_prompts = point_prompts[:30]
+                input_labels_prompts = input_labels_prompts[:30]
         
 
             with torch.no_grad():
@@ -291,7 +291,14 @@ def train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Los
             #     plt.show()
 
             # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss
-            pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
+            
+            if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
+                # generate boolean pixel masks with image original size, use False as the mask value
+                for i in range(len(high_res_masks)):
+                    pixel_masks.append(np.zeros((1, original_image_size[0], original_image_size[1])))
+                pixel_masks = torch.as_tensor(pixel_masks).to(device).float()
+            else:
+                pixel_masks = torch.as_tensor(pixel_masks.astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
                 focal_loss += Focal_Loss(high_res_masks[i], pixel_masks[i])
@@ -349,7 +356,7 @@ def validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss):
             resize_img = model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
 
             # Get the bbox, point prompts and input labels and transform accordingly
-            bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size, original_image_size, cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
             #scale the bbox prompts and point prompts according to the scale factor
             bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
             point_prompts = np.around(np.array(point_prompts) * scale_factor)
@@ -461,7 +468,7 @@ def test(model, device, test_loader, Focal_Loss, Dice_Loss, Iou_Loss):
             resize_img = model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
 
             # Get the bbox, point prompts and input labels and transform accordingly
-            bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size, original_image_size, cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            bbox_prompts, point_prompts, input_labels_prompts = _get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
             #scale the bbox prompts and point prompts according to the scale factor
             bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
             point_prompts = np.around(np.array(point_prompts) * scale_factor)

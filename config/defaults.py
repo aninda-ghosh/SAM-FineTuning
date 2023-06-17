@@ -18,7 +18,7 @@ _C = CN()
 
 _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
-_C.MODEL.CHECKPOINT = "/home/legion-ubuntu/Research/Kerner-Lab/SAM-FineTuning/modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+_C.MODEL.CHECKPOINT = "/home/aninda/projects/SAM-FineTuning/modeling/model_checkpoints/sam_vit_b_01ec64.pth"
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -31,7 +31,7 @@ _C.INPUT = CN()
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
 # Root directory of dataset
-_C.DATASETS.ROOT_DIR = "/home/legion-ubuntu/Research/Kerner-Lab/datasets/images2_small/"
+_C.DATASETS.ROOT_DIR = "/home/aninda/projects/all_dataset/"
 
 # This is used to generate the bboxes for non labeled images
 _C.BBOX = CN()
@@ -47,7 +47,7 @@ _C.DATALOADER = CN()
 # Number of data loading threads
 _C.DATALOADER.NUM_WORKERS = 0   # Add any positive integer for multiple worker nodes
 # Batch size of the dataset
-_C.DATALOADER.BATCH_SIZE = 4
+_C.DATALOADER.BATCH_SIZE = 2
 # Number of images per batch during training, validation and testing
 _C.DATALOADER.TRAIN_DATA = 0.8  # 80% of the batched data for training
 _C.DATALOADER.VALID_DATA = 0.2  # 20% of the batched data for validation
@@ -63,7 +63,7 @@ _C.DATALOADER.TEST_DATA = 0.2  # 20% of the batched data for testing
 # see 2 images per batch
 _C.SOLVER = CN()
 _C.SOLVER.MAX_EPOCHS = 50
-_C.SOLVER.ITEMS_PER_BATCH = 2
+_C.SOLVER.ITEMS_PER_BATCH = 1
 _C.SOLVER.START_LR = 0.01
 _C.SOLVER.MIN_LR = 0.0001
 _C.SOLVER.WEIGHT_DECAY = 0.0001

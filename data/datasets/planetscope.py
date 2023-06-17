@@ -35,7 +35,7 @@ class ParcelDataset(Dataset):
         # Read the merged parcel data geo json file, This contains the parcel id and the geometry of all the parcels
         self.data = gpd.read_file(self.path + "parcel_data.geojson")
         # Get the image paths and corresponding pixel mask arrays
-        self.data = self._get_image_pixel_masks(parcel_data=self.data, size=(672, 672))     #! Specify the image size which the model can expect
+        self.data = self._get_image_pixel_masks(parcel_data=self.data, size=(448, 448))     #! Specify the image size which the model can expect
         
         self.image_size = None
         self.scale_factor = 1.0 # By default the scale factor is 1.0, which means the image is not scaled
