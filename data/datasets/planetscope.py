@@ -145,8 +145,7 @@ class ParcelDataset(Dataset):
             # If the parcel has no labels, let's keep it with no labels and no prompts
             if len(polygon_mask_list) == 0:
                 # Store the image path based on the current geoJSON file name only if the parcel has labels
-                # processed_data.append((self.path + parcel_id + '.png', [], [], [], []))
-                # TODO: Generate random samples of pixel masks for the parcels with no labels (Use Gaussian sampler to generate the location of the masks)
+                processed_data.append((self.path + parcel_id + '.png', []))
                 continue
             
             # Get the pixel masks for the parcel

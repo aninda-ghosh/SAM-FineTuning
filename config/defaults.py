@@ -18,7 +18,7 @@ _C = CN()
 
 _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
-_C.MODEL.CHECKPOINT = "/home/aninda/projects/SAM-FineTuning/modeling/model_checkpoints/sam_checkpoint_30.pth"
+_C.MODEL.CHECKPOINT = "/home/legion-ubuntu/Research/Kerner-Lab/SAM-FineTuning/modeling/model_checkpoints/sam_vit_b_01ec64.pth"
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -31,7 +31,14 @@ _C.INPUT = CN()
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
 # Root directory of dataset
-_C.DATASETS.ROOT_DIR = "/home/aninda/Dropbox (ASU)/ASU/Kerner-Lab/datasets/images2_small/"
+_C.DATASETS.ROOT_DIR = "/home/legion-ubuntu/Research/Kerner-Lab/datasets/images2_small/"
+
+# This is used to generate the bboxes for non labeled images
+_C.BBOX = CN()
+_C.BBOX.NUMBER = 30
+_C.BBOX.MIN_DISTANCE = 50
+_C.BBOX.SIZE_REF = 0.25
+
 
 # -----------------------------------------------------------------------------
 # DataLoader
@@ -45,7 +52,6 @@ _C.DATALOADER.BATCH_SIZE = 4
 _C.DATALOADER.TRAIN_DATA = 0.8  # 80% of the batched data for training
 _C.DATALOADER.VALID_DATA = 0.2  # 20% of the batched data for validation
 _C.DATALOADER.TEST_DATA = 0.2  # 20% of the batched data for testing
-
 
 
 # ---------------------------------------------------------------------------- #
