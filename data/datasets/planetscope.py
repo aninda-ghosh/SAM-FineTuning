@@ -118,7 +118,7 @@ class ParcelDataset(Dataset):
             pixel_masks.append(pixel_mask.astype(dtype=bool))
         
         # Return the pixel masks as a numpy array
-        return np.array(pixel_masks)    
+        return pixel_masks    
 
     def _get_image_pixel_masks(self, parcel_data, size):
         """Convert the polygon masks to pixel masks
@@ -146,11 +146,10 @@ class ParcelDataset(Dataset):
             if len(polygon_mask_list) == 0:
                 # Store the image path based on the current geoJSON file name only if the parcel has labels
                 processed_data.append((self.path + parcel_id + '.png', []))
-                continue
-            
-            # Get the pixel masks for the parcel
-            pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)
-            # Get the bounding boxes and point prompts for the parcel
-            processed_data.append((self.path + parcel_id + '.png', pixel_masks))
+            else:
+                # Get the pixel masks for the parcel
+                pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)
+                # Get the bounding boxes and point prompts for the parcel
+                processed_data.append((self.path + parcel_id + '.png', pixel_masks))
 
         return processed_data
