@@ -1,4 +1,5 @@
 from yacs.config import CfgNode as CN
+import torch
 
 # -----------------------------------------------------------------------------
 # Convention about Training / Test specific parameters
@@ -17,8 +18,9 @@ from yacs.config import CfgNode as CN
 _C = CN()
 
 _C.MODEL = CN()
-_C.MODEL.DEVICE = "cuda"
-_C.MODEL.CHECKPOINT = "/home/aninda/projects/SAM-FineTuning/modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+_C.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+_C.MODEL.NUM_GPUS = 1
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -31,7 +33,7 @@ _C.INPUT = CN()
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
 # Root directory of dataset
-_C.DATASETS.ROOT_DIR = "/home/aninda/projects/all_dataset/"
+_C.DATASETS.ROOT_DIR = "../slice/data/france/dataset_chunk/"
 
 # This is used to generate the bboxes for non labeled images
 _C.BBOX = CN()

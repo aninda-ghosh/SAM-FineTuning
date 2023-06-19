@@ -1,13 +1,19 @@
 # encoding: utf-8
 """
-@author:  Aninda Ghosh
-@contact: aghosh57@asu.edu
+@author:  Aninda Ghosh, Manthan Satish
+@contact: aghosh57@asu.edu, mcsatish@asu.edu
 """
 
 import numpy as np
 import cv2
 import geopandas as gpd
+import torch
 from torch.utils.data import Dataset
+from rich.console import Console
+from modeling.segment_anything.build_sam import prepare_sam
+from modeling.segment_anything.utils.transforms import ResizeLongestSide
+from utils.data_support import get_bbox_point_and_inputlabel_prompts
+from config import cfg
 
 class ParcelDataset(Dataset):
     """Parcel dataset
@@ -19,28 +25,34 @@ class ParcelDataset(Dataset):
             - xxxxx.png
             - xxxxx.geojson
             - ...
+            - ...
+            - parcel_data.geojson
 
     The labels is loaded using the `geopandas` library.
     The images are loaded using the `matplotlib.pyplot` module.
     The labels are stored in boolean masks. The masks are stored in a list.
     """
     
-    def __init__(self, path):
+    def __init__(self, cfg):
         """
         Args:
             path (string): Path to the folder containing the dataset.
             The dataset is stored in a single folder.
         """
-        self.path = path
+        self.cfg = cfg
+        self.path = cfg.DATASETS.ROOT_DIR
         # Read the merged parcel data geo json file, This contains the parcel id and the geometry of all the parcels
         self.data = gpd.read_file(self.path + "parcel_data.geojson")
         # Get the image paths and corresponding pixel mask arrays
-        self.data = self._get_image_pixel_masks(parcel_data=self.data, size=(448, 448))     #! Specify the image size which the model can expect
+        self.data = self._get_image_pixel_masks(parcel_data=self.data, size=(224, 224))     #! Specify the image size which the model can expect
         
         self.image_size = None
         self.scale_factor = 1.0 # By default the scale factor is 1.0, which means the image is not scaled
         
         self.length = len(self.data)
+
+        self.model = prepare_sam(checkpoint=cfg.MODEL.CHECKPOINT, model_type = 'base')
+
         
     def __len__(self):
         return self.length
@@ -63,19 +75,43 @@ class ParcelDataset(Dataset):
         image = cv2.imread(image_path)
         
         self.image_size = image.shape[:2]
-        self.scale_factor = 1024/max(self.image_size)   #! This is the scale factor used to scale the image to 1024x1024
-
-        # Ground truth masks
+        scale_factor = 1024/max(self.image_size)   #! This is the scale factor used to scale the image to 1024x1024
         gt_masks = self.data[idx][1]
 
-        # These metadata are used for the model
-        data = {
-            "image": image,                     #The image will be scaled before being passed to the model in the engine
-            "gt_masks": gt_masks,               #The masks will be scaled before being passed to the model in the engine
-            "image_size": self.image_size,      #This is the original image size
-            "scale_factor": self.scale_factor   #This is the scale factor used to scale the image to 1024x1024
+        sam_transform = ResizeLongestSide(self.model.image_encoder.img_size)
+        resize_img = sam_transform.apply_image(image)
+        resize_img = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(self.model.device).to(torch.float32)
+        resize_img = self.model.preprocess(resize_img[None,:,:,:])
+
+        bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(gt_masks, 
+                                                                                                  self.image_size[0], 
+                                                                                                  self.image_size[1], 
+                                                                                                  self.cfg.BBOX.NUMBER, 
+                                                                                                  self.cfg.BBOX.MIN_DISTANCE, 
+                                                                                                  self.cfg.BBOX.SIZE_REF)
+        
+        bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
+        
+        bbox_prompts = torch.as_tensor(bbox_prompts).to(torch.float32)
+
+        if len(bbox_prompts) > self.cfg.BBOX.BOX_LIMITER:
+            bbox_prompts = bbox_prompts[:self.cfg.BBOX.BOX_LIMITER]
+            input_labels_prompts = input_labels_prompts[:self.cfg.BBOX.BOX_LIMITER]
+
+        # # These metadata are used for the model
+        # data = {
+        #     "image": image,                     #The image will be scaled before being passed to the model in the engine
+        #     "gt_masks": gt_masks,               #The masks will be scaled before being passed to the model in the engine
+        #     "image_size": self.image_size,      #This is the original image size
+        #     "scale_factor": self.scale_factor   #This is the scale factor used to scale the image to 1024x1024
+        # }
+        # return data
+        return {
+            "image": resize_img,
+            "bbox_prompts": bbox_prompts,
+            "gt_masks": gt_masks,
+            "image_size": self.image_size
         }
-        return data
 
     def _convert_polygons_to_pixels(self, parcel_geometry, polygon_labels, size):
         # Create a black background
@@ -135,21 +171,32 @@ class ParcelDataset(Dataset):
         
         # Store the processed data in a list
         processed_data = []
-        
-        for _, data in parcel_data.iterrows():
-            parcel_id = data['parcel_id']
-            geometry = data['geometry']
-            
-            polygon_mask_list = gpd.read_file(self.path + parcel_id + '.geojson')
-            
-            # If the parcel has no labels, let's keep it with no labels and no prompts
-            if len(polygon_mask_list) == 0:
-                # Store the image path based on the current geoJSON file name only if the parcel has labels
-                processed_data.append((self.path + parcel_id + '.png', []))
-            else:
-                # Get the pixel masks for the parcel
-                pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)
-                # Get the bounding boxes and point prompts for the parcel
-                processed_data.append((self.path + parcel_id + '.png', pixel_masks))
+
+        console = Console()
+
+        with console.status("[bold green]Loading data...", spinner="earth") as status:
+            for _, data in parcel_data.iterrows():
+                parcel_id = data['parcel_id']
+                geometry = data['geometry']
+                
+                polygon_mask_list = gpd.read_file(self.path + parcel_id + '.geojson')
+                
+                # If the parcel has no labels, let's keep it with no labels and no prompts
+                if len(polygon_mask_list) == 0:
+                    # Store the image path based on the current geoJSON file name only if the parcel has labels
+                    processed_data.append((self.path + parcel_id + '.png', []))
+                else:
+                    # Get the pixel masks for the parcel
+                    pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)
+                    # Get the bounding boxes and point prompts for the parcel
+                    processed_data.append((self.path + parcel_id + '.png', pixel_masks))
+
+                status.update(f"[bold green]Loading data... Found [blue]{len(processed_data)} [green]Images")
+
+        console.log(f"[bold green]Data loaded! Total number of images: [blue]{len(processed_data)}")
 
         return processed_data
+    
+
+if __name__ == "__main__":
+    dataset = ParcelDataset(cfg)
