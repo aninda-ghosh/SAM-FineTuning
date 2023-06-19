@@ -10,9 +10,6 @@ import geopandas as gpd
 import torch
 from torch.utils.data import Dataset
 from rich.console import Console
-from modeling.segment_anything.build_sam import prepare_sam
-from modeling.segment_anything.utils.transforms import ResizeLongestSide
-from utils.data_support import get_bbox_point_and_inputlabel_prompts
 from config import cfg
 
 class ParcelDataset(Dataset):
@@ -78,26 +75,6 @@ class ParcelDataset(Dataset):
         scale_factor = 1024/max(self.image_size)   #! This is the scale factor used to scale the image to 1024x1024
         gt_masks = self.data[idx][1]
 
-        sam_transform = ResizeLongestSide(self.model.image_encoder.img_size)
-        resize_img = sam_transform.apply_image(image)
-        resize_img = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(self.model.device).to(torch.float32)
-        resize_img = self.model.preprocess(resize_img[None,:,:,:])
-
-        bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(gt_masks, 
-                                                                                                  self.image_size[0], 
-                                                                                                  self.image_size[1], 
-                                                                                                  self.cfg.BBOX.NUMBER, 
-                                                                                                  self.cfg.BBOX.MIN_DISTANCE, 
-                                                                                                  self.cfg.BBOX.SIZE_REF)
-        
-        bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
-        
-        bbox_prompts = torch.as_tensor(bbox_prompts).to(torch.float32)
-
-        if len(bbox_prompts) > self.cfg.BBOX.BOX_LIMITER:
-            bbox_prompts = bbox_prompts[:self.cfg.BBOX.BOX_LIMITER]
-            input_labels_prompts = input_labels_prompts[:self.cfg.BBOX.BOX_LIMITER]
-
         # # These metadata are used for the model
         # data = {
         #     "image": image,                     #The image will be scaled before being passed to the model in the engine
@@ -107,10 +84,11 @@ class ParcelDataset(Dataset):
         # }
         # return data
         return {
-            "image": resize_img,
-            "bbox_prompts": bbox_prompts,
+            "image": image,
+            "scale_factor": scale_factor,
             "gt_masks": gt_masks,
-            "image_size": self.image_size
+            "image_size": self.image_size, 
+            "parcel_id": image_path
         }
 
     def _convert_polygons_to_pixels(self, parcel_geometry, polygon_labels, size):

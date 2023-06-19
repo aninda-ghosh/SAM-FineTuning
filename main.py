@@ -24,16 +24,15 @@ def main():
             param.requires_grad = False
 
     sam_datamodule = SAMDataLoader(cfg)
-    # wandb_logger = WandbLogger(project='SAM', entity='sam')
-    tensorborad_logger = TensorBoardLogger('logs')
+    
+    tensorboard_logger = TensorBoardLogger('logs')
     trainer = Trainer(
         callbacks=[RichProgressBar()], 
-        # logger=wandb_logger, 
-        logger=tensorborad_logger,
+        logger=tensorboard_logger,
         max_epochs=epochs
     )
 
-    modelx = SAMTrainer(model)
+    modelx = SAMTrainer(cfg, model, device)
     trainer.fit(modelx, sam_datamodule)
 
 

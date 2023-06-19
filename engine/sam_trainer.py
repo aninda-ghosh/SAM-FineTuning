@@ -16,16 +16,19 @@ from solver.loss import FocalLoss, DiceLoss, IoULoss
 
 import lightning.pytorch as pl
 
-from config import cfg
-
+from modeling.segment_anything.build_sam import prepare_sam
+from modeling.segment_anything.utils.transforms import ResizeLongestSide
+from utils.data_support import get_bbox_point_and_inputlabel_prompts
 
 class SAMTrainer(pl.LightningModule):
-    def __init__(self, model):
+    def __init__(self, cfg, model, device):
         super().__init__()
         self.model = model
         self.Focal_Loss = FocalLoss()
         self.Dice_Loss = DiceLoss()
         self.Iou_Loss = IoULoss()
+        self.cfg = cfg
+        self.device = device
 
     def forward(self, x):
         self.process_step(x)
@@ -33,7 +36,7 @@ class SAMTrainer(pl.LightningModule):
     def training_step(self, batchx, batch_idx):
         focal_loss, dice_loss, iou_loss = self.process_step(batchx)
 
-        loss = (cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
+        loss = (self.cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (self.cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
         self.log("train_loss", loss)
         self.log("train_focal_loss", focal_loss)
         self.log("train_dice_loss", dice_loss)
@@ -44,7 +47,7 @@ class SAMTrainer(pl.LightningModule):
     def validation_step(self, batchx, batch_idx):
         focal_loss, dice_loss, iou_loss = self.process_step(batchx)
 
-        loss = (cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
+        loss = (self.cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (self.cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
         self.log("train_loss", loss)
         self.log("train_focal_loss", focal_loss)
         self.log("train_dice_loss", dice_loss)
@@ -53,10 +56,10 @@ class SAMTrainer(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = build_optimizer(cfg, self.model)
-        scheduler = build_lrSchedular(cfg=cfg, optimizer=optimizer)
+        optimizer = build_optimizer(self.cfg, self.model)
+        scheduler = build_lrSchedular(cfg=self.cfg, optimizer=optimizer)
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
-    
+
     def process_step(self, batchx):
         instances = 0
         focal_loss = 0
@@ -64,8 +67,8 @@ class SAMTrainer(pl.LightningModule):
         iou_loss = 0
 
         for batch in batchx:
-            x1, x2, y, image_size = batch['image'], batch['bbox_prompts'], batch['gt_masks'], batch['image_size']
-            image_embeddings, sparse_embeddings, dense_embeddings = self.encode(x1, x2)
+            id, img, gt_masks, image_size, scale_factor = batch['parcel_id'], batch['image'], batch['gt_masks'], batch['image_size'], batch['scale_factor']
+            image_embeddings, sparse_embeddings, dense_embeddings = self.encode(self.cfg, img, gt_masks, image_size, scale_factor)
             low_res_masks, iou_predictions = self.model.mask_decoder(
                 image_embeddings=image_embeddings.to(self.device),  # (B, 256, 64, 64)
                 image_pe= self.model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
@@ -91,19 +94,45 @@ class SAMTrainer(pl.LightningModule):
                 iou_loss += self.Iou_Loss(high_res_masks[i], pixel_masks_tensor[i], iou_predictions[i][0].to(self.device))
                 instances += 1
 
+            del high_res_masks, pixel_masks_tensor, low_res_masks, iou_predictions, upscaled_masks, image_embeddings, sparse_embeddings, dense_embeddings   
+
         return (focal_loss/instances, dice_loss/instances, iou_loss/instances)
     
     
-    def encode(self, x1, x2):
+    def encode(self, cfg, img, gt_masks, image_size, scale_factor):
         """
 		Encode the input image and the prompts
 		"""
+        # Image needs to be resized to 1024*1024 and necessary preprocessing should be done
+        sam_transform = ResizeLongestSide(self.model.image_encoder.img_size)
+        resize_img = sam_transform.apply_image(img)
+        resize_img = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(self.device)
+        resize_img = self.model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
+
+        # Get the bbox, point prompts and input labels and transform accordingly
+        bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(gt_masks, image_size[0], image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+        #scale the bbox prompts and point prompts according to the scale factor
+        bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
+        point_prompts = np.around(np.array(point_prompts) * scale_factor)
+
+        bbox_prompts = torch.as_tensor(bbox_prompts).to(self.device)
+
+        # limit the number of prompts to the box limiter value
+        if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
+            bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
+            point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
+            input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
+
         with torch.no_grad():
-            image_embeddings = self.model.image_encoder(x1.to(self.device))
+            # Get the image embeddings, sparse embeddings and dense embeddings from the image encoder and prompt encoder
+            image_embeddings = self.model.image_encoder(resize_img.to(self.device))
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
                 points=None,
-                boxes=x2.to(self.device),
+                boxes=bbox_prompts.to(self.device),
                 masks=None,
             )
 
         return image_embeddings, sparse_embeddings, dense_embeddings
+    
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        torch.cuda.empty_cache()
