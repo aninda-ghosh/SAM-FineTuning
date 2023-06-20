@@ -447,7 +447,6 @@ def main():
         # Train the model
         epoch_train_loss = train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Loss)
         epoch_train_loss /= (epoch)
-        scheduler.step(metrics=epoch_train_loss)
         training_losses.append(epoch_train_loss)
 
         print('Validating the model...')
@@ -455,6 +454,8 @@ def main():
         epoch_valid_loss = validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss)
         epoch_valid_loss /= (epoch)
         validation_losses.append(epoch_valid_loss)
+
+        scheduler.step(metrics=epoch_valid_loss)
 
         print(f'Train Loss: {epoch_train_loss}, Valid Loss: {epoch_valid_loss}')
 
