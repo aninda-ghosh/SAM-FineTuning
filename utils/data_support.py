@@ -25,33 +25,33 @@ def get_bbox_point_and_inputlabel_prompts(pixel_masks, image_width, image_height
             y_indices, x_indices = np.where(mask > 0)
 
             # # This is done if we have masks but the labels are all 0, we have to generate random bounding boxes then
-            # if (len (x_indices) == 0) or (len(y_indices) == 0):
-            #     bbox_prompts = generate_random_bounding_boxes(image_width, image_height, num_boxes, min_distance, box_percentage)
-            # else:
-            x_min, x_max = np.min(x_indices), np.max(x_indices)
-            y_min, y_max = np.min(y_indices), np.max(y_indices)
-            # add perturbation to bounding box coordinates
-            H, W = mask.shape
-            x_min = max(0, x_min - np.random.randint(0, 30))
-            x_max = min(W, x_max + np.random.randint(0, 30))
-            y_min = max(0, y_min - np.random.randint(0, 30))
-            y_max = min(H, y_max + np.random.randint(0, 30))
-            bbox = [x_min, y_min, x_max, y_max]
-            bbox_prompts.append(bbox)
+            if (len (x_indices) == 0) or (len(y_indices) == 0):
+                bbox_prompts = generate_random_bounding_boxes(image_width, image_height, num_boxes, min_distance, box_percentage)
+            else:
+                x_min, x_max = np.min(x_indices), np.max(x_indices)
+                y_min, y_max = np.min(y_indices), np.max(y_indices)
+                # add perturbation to bounding box coordinates
+                H, W = mask.shape
+                x_min = max(0, x_min - np.random.randint(0, 30))
+                x_max = min(W, x_max + np.random.randint(0, 30))
+                y_min = max(0, y_min - np.random.randint(0, 30))
+                y_max = min(H, y_max + np.random.randint(0, 30))
+                bbox = [x_min, y_min, x_max, y_max]
+                bbox_prompts.append(bbox)
 
-            # Get grid points within the bounding box
-            point_grid_per_crop= build_point_grid(10)
-            #This forms a 2D grid points and we need to normalize it to the bbox size
-            point_grid_per_crop[:, 0] = point_grid_per_crop[:, 0] * (x_max - x_min) + x_min
-            point_grid_per_crop[:, 1] = point_grid_per_crop[:, 1] * (y_max - y_min) + y_min
-            #Convert the grid points to a integer
-            point_grid_per_crop = np.around(point_grid_per_crop).astype(np.float64)
-            points_per_crop = np.array([np.array([point_grid_per_crop])])
-            points_per_crop = np.transpose(points_per_crop, axes=(0, 2, 1, 3))
-            point_prompts.append(points_per_crop)
+                # Get grid points within the bounding box
+                point_grid_per_crop= build_point_grid(10)
+                #This forms a 2D grid points and we need to normalize it to the bbox size
+                point_grid_per_crop[:, 0] = point_grid_per_crop[:, 0] * (x_max - x_min) + x_min
+                point_grid_per_crop[:, 1] = point_grid_per_crop[:, 1] * (y_max - y_min) + y_min
+                #Convert the grid points to a integer
+                point_grid_per_crop = np.around(point_grid_per_crop).astype(np.float64)
+                points_per_crop = np.array([np.array([point_grid_per_crop])])
+                points_per_crop = np.transpose(points_per_crop, axes=(0, 2, 1, 3))
+                point_prompts.append(points_per_crop)
 
-            input_labels = np.ones_like(points_per_crop[:, :, :, 0], dtype=np.int64)
-            input_labels_prompts.append(input_labels)
+                input_labels = np.ones_like(points_per_crop[:, :, :, 0], dtype=np.int64)
+                input_labels_prompts.append(input_labels)
 
     return bbox_prompts, point_prompts, input_labels_prompts
 
