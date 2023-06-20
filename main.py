@@ -32,7 +32,7 @@ def main():
         max_epochs=epochs
     )
 
-    modelx = SAMTrainer(cfg, model, device)
+    modelx = SAMTrainer(cfg, model)
     trainer.fit(modelx, sam_datamodule)
 
 

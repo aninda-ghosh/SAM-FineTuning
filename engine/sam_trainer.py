@@ -16,49 +16,50 @@ from solver.loss import FocalLoss, DiceLoss, IoULoss
 
 import lightning.pytorch as pl
 
-from modeling.segment_anything.build_sam import prepare_sam
 from modeling.segment_anything.utils.transforms import ResizeLongestSide
 from utils.data_support import get_bbox_point_and_inputlabel_prompts
 
 class SAMTrainer(pl.LightningModule):
-    def __init__(self, cfg, model, device):
+    def __init__(self, cfg, model):
         super().__init__()
         self.model = model
         self.Focal_Loss = FocalLoss()
         self.Dice_Loss = DiceLoss()
         self.Iou_Loss = IoULoss()
         self.cfg = cfg
-        self.device = device
+        self.train_lossx = 0
+        self.valid_lossx = 0
 
     def forward(self, x):
-        self.process_step(x)
+        pass
 
     def training_step(self, batchx, batch_idx):
         focal_loss, dice_loss, iou_loss = self.process_step(batchx)
 
+        batch_size = self.cfg.SOLVER.ITEMS_PER_BATCH
         loss = (self.cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (self.cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
-        self.log("train_loss", loss)
-        self.log("train_focal_loss", focal_loss)
-        self.log("train_dice_loss", dice_loss)
-        self.log("train_iou_loss", iou_loss)
-
+        self.log("train_loss", loss, batch_size=batch_size)
+        self.log("train_focal_loss", focal_loss, batch_size=batch_size)
+        self.log("train_dice_loss", dice_loss, batch_size=batch_size)
+        self.log("train_iou_loss", iou_loss, batch_size=batch_size)
+        self.train_lossx += loss
         return loss
 
     def validation_step(self, batchx, batch_idx):
         focal_loss, dice_loss, iou_loss = self.process_step(batchx)
-
+        batch_size = self.cfg.SOLVER.ITEMS_PER_BATCH
         loss = (self.cfg.LOSS.FOCAL_LOSS_WEIGHT * focal_loss) + (self.cfg.LOSS.DICE_LOSS_WEIGHT * dice_loss)
-        self.log("train_loss", loss)
-        self.log("train_focal_loss", focal_loss)
-        self.log("train_dice_loss", dice_loss)
-        self.log("train_iou_loss", iou_loss)
-
+        self.log("valid_loss", loss, batch_size=batch_size)
+        self.log("valid_focal_loss", focal_loss, batch_size=batch_size)
+        self.log("valid_dice_loss", dice_loss, batch_size=batch_size)
+        self.log("valid_iou_loss", iou_loss, batch_size=batch_size)
+        self.valid_lossx += loss
         return loss
 
     def configure_optimizers(self):
         optimizer = build_optimizer(self.cfg, self.model)
         scheduler = build_lrSchedular(cfg=self.cfg, optimizer=optimizer)
-        return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def process_step(self, batchx):
         instances = 0
@@ -79,14 +80,14 @@ class SAMTrainer(pl.LightningModule):
             upscaled_masks = self.model.postprocess_masks(low_res_masks, (1024, 1024), image_size).to(self.device)
             high_res_masks = F.normalize(F.threshold(upscaled_masks, 0.0, 0)).to(self.device).to(self.device).to(torch.float32)
 
-            if len(y) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
+            if len(gt_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
                 _pixel_masks = []
                 # generate boolean pixel masks with image original size, use False as the mask value
                 for i in range(len(high_res_masks)):
                     _pixel_masks.append(np.full((image_size[0], image_size[1]), False, dtype=bool))
                 pixel_masks_tensor = torch.as_tensor(np.array(_pixel_masks).astype(float)).to(self.device).to(torch.float32)
             else:
-                pixel_masks_tensor = torch.as_tensor(np.array(y).astype(float)).to(self.device).to(torch.float32)
+                pixel_masks_tensor = torch.as_tensor(np.array(gt_masks).astype(float)).to(self.device).to(torch.float32)
 
             for i in range(len(high_res_masks)):
                 focal_loss += self.Focal_Loss(high_res_masks[i], pixel_masks_tensor[i])
@@ -136,3 +137,11 @@ class SAMTrainer(pl.LightningModule):
     
     def on_train_batch_end(self, outputs, batch, batch_idx):
         torch.cuda.empty_cache()
+
+    def on_train_epoch_end(self) -> None:
+        print("Train Loss: ", self.train_lossx)
+        self.train_lossx = 0
+
+    def on_validation_epoch_end(self) -> None:
+        print("Valid Loss: ", self.valid_lossx)
+        self.valid_lossx = 0
