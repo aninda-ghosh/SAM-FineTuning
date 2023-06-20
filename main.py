@@ -449,17 +449,14 @@ def main():
     training_losses = []
     validation_losses = []
     for epoch in range(1, epochs+1):
-        print(f'\nEpoch {epoch}:')
         logger.info(f'\nEpoch {epoch}:')
 
-        print('Training the model...')
         logger.info('Training the model...')
         # Train the model
         epoch_train_loss = train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Loss)
         epoch_train_loss /= (epoch)
         training_losses.append(epoch_train_loss)
 
-        print('Validating the model...')
         logger.info('Validating the model...')
         # Validate the model
         epoch_valid_loss = validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss)
@@ -468,16 +465,14 @@ def main():
 
         scheduler.step(metrics=epoch_valid_loss)
 
-        print(f'Train Loss: {epoch_train_loss}, Valid Loss: {epoch_valid_loss}')
         logger.info(f'Train Loss: {epoch_train_loss}, Valid Loss: {epoch_valid_loss}')
 
         if epoch % 30 == 0:
-            print(f'\nSaving the model at epoch {epoch}\n')
+            logger.info(f'\nSaving the model at epoch {epoch}\n')
             torch.save(model.state_dict(), f"modeling/model_checkpoints/sam_checkpoint_{epoch}.pth")
 
     # Test the model
     test_loss = test(model, device, test_loader, Focal_Loss, Dice_Loss, Iou_Loss)
-    print(f'\nTest Loss: {test_loss}')
     logger.info(f'\nTest Loss: {test_loss}')
 
     # Store the training and validation losses as numpy arrays in the output directory
