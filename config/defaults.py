@@ -18,7 +18,7 @@ _C = CN()
 
 _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
-_C.MODEL.CHECKPOINT = "../modeling/model_checkpoints/sam_vit_l_0b3195.pth"
+_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_l_0b3195.pth"
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -86,4 +86,4 @@ _C.LOSS.DICE_LOSS_WEIGHT = 1
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #
-_C.OUTPUT_DIR = "../logs/"
+_C.OUTPUT_DIR = "./logs/"
