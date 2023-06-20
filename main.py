@@ -444,7 +444,7 @@ def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    logger = setup_logger('SAM', output_dir, 0, filename=current_time+'.log')
+    logger = setup_logger('SAM', output_dir)
 
     training_losses = []
     validation_losses = []
