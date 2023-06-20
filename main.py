@@ -5,6 +5,7 @@
 """
 
 import argparse
+from datetime import datetime
 import os
 import sys
 from os import mkdir
@@ -437,19 +438,29 @@ def main():
     #Put the model in the train mode
     model.to(device)    # Put the model on GPU
 
+    # Create a folder to save the model and the logs based on the current time
+    current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+    output_dir = cfg.OUTPUT_DIR + current_time
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    logger = setup_logger('SAM', output_dir, 0, filename=current_time+'.log')
 
     training_losses = []
     validation_losses = []
     for epoch in range(1, epochs+1):
         print(f'\nEpoch {epoch}:')
+        logger.info(f'\nEpoch {epoch}:')
 
         print('Training the model...')
+        logger.info('Training the model...')
         # Train the model
         epoch_train_loss = train(model, device, train_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Loss)
         epoch_train_loss /= (epoch)
         training_losses.append(epoch_train_loss)
 
         print('Validating the model...')
+        logger.info('Validating the model...')
         # Validate the model
         epoch_valid_loss = validate(model, device, valid_loader, Focal_Loss, Dice_Loss, Iou_Loss)
         epoch_valid_loss /= (epoch)
@@ -458,6 +469,7 @@ def main():
         scheduler.step(metrics=epoch_valid_loss)
 
         print(f'Train Loss: {epoch_train_loss}, Valid Loss: {epoch_valid_loss}')
+        logger.info(f'Train Loss: {epoch_train_loss}, Valid Loss: {epoch_valid_loss}')
 
         if epoch % 30 == 0:
             print(f'\nSaving the model at epoch {epoch}\n')
@@ -466,6 +478,16 @@ def main():
     # Test the model
     test_loss = test(model, device, test_loader, Focal_Loss, Dice_Loss, Iou_Loss)
     print(f'\nTest Loss: {test_loss}')
+    logger.info(f'\nTest Loss: {test_loss}')
+
+    # Store the training and validation losses as numpy arrays in the output directory
+    np.save(f"{output_dir}/training_losses.npy", np.array(training_losses))
+    np.save(f"{output_dir}/validation_losses.npy", np.array(validation_losses))
+    
+    # Save the model for the final time in the output directory
+    logger.info(f'\nSaving the final model\n')
+    torch.save(model.state_dict(), f"{output_dir}/sam_checkpoint_final.pth")
+    
 
 if __name__ == '__main__':
     main()
