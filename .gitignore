@@ -7,3 +7,4 @@ dist
 torchlib.egg-info
 modeling/model_checkpoints/*.pt
 modeling/model_checkpoints/*.pth
+logs/*

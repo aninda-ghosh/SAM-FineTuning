@@ -413,7 +413,7 @@ def main():
     cfg.freeze()
 
     # Get the model and download the checkpoint if needed
-    model = prepare_sam(checkpoint=cfg.MODEL.CHECKPOINT, model_type = 'base')
+    model = prepare_sam(checkpoint=cfg.MODEL.CHECKPOINT, model_type = 'large')
     device = cfg.MODEL.DEVICE
     epochs = cfg.SOLVER.MAX_EPOCHS
 
