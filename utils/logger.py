@@ -9,9 +9,9 @@ import os
 import sys
 
 
-def setup_logger(name, save_dir):
+def setup_logger(name, log_level, save_dir):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(log_level)
 
     ch = logging.StreamHandler(stream=sys.stdout)
     ch.setLevel(logging.DEBUG)

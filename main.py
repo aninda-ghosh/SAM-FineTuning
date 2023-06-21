@@ -41,6 +41,9 @@ from solver.loss import FocalLoss, DiceLoss, IoULoss
 from utils.data_support import get_bbox_point_and_inputlabel_prompts
 
 
+# Freeze the config file 
+cfg.freeze()
+
 # Create a folder to save the model and the logs based on the current time
 current_time = datetime.now().strftime('%b%d_%H-%M-%S')
 output_dir = cfg.OUTPUT_DIR + current_time
@@ -48,9 +51,11 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
     os.makedirs(output_dir + "/model_checkpoints")
 
-logger = setup_logger('SAM', output_dir)
+# Setup the logger
+logger = setup_logger('SAM', cfg.LOGGER.LEVEL, output_dir)
 
 
+# Define the epoch step function
 def epoch_step(mode, model, device, data_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Loss):
     epoch_loss = 0
 
@@ -172,7 +177,7 @@ def epoch_step(mode, model, device, data_loader, optimizer, Focal_Loss, Dice_Los
                     instances += 1
                 except:
                     # Catch the error and continue
-                    logger.debug(f'Error in calculating the loss for image {item["image_name"]} and mask {i}')
+                    logger.debug(f'Error in calculating the loss for mask {i}')
                     continue
             
         
@@ -204,9 +209,6 @@ def epoch_step(mode, model, device, data_loader, optimizer, Focal_Loss, Dice_Los
 
 
 def main():
-    
-    cfg.freeze()
-
     # Get the model and download the checkpoint if needed
     model = prepare_sam(checkpoint=cfg.MODEL.CHECKPOINT, model_type = cfg.MODEL.TYPE)
     device = cfg.MODEL.DEVICE
