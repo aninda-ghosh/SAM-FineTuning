@@ -41,6 +41,14 @@ from solver.loss import FocalLoss, DiceLoss, IoULoss
 from utils.data_support import get_bbox_point_and_inputlabel_prompts
 
 
+# Create a folder to save the model and the logs based on the current time
+current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+output_dir = cfg.OUTPUT_DIR + current_time
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+    os.makedirs(output_dir + "/model_checkpoints")
+
+logger = setup_logger('SAM', output_dir)
 
 
 def epoch_step(mode, model, device, data_loader, optimizer, Focal_Loss, Dice_Loss, Iou_Loss):
@@ -164,12 +172,14 @@ def epoch_step(mode, model, device, data_loader, optimizer, Focal_Loss, Dice_Los
                     instances += 1
                 except:
                     # Catch the error and continue
+                    logger.debug(f'Error in calculating the loss for image {item["image_name"]} and mask {i}')
                     continue
             
         
             # delete all the local variables and cuda cache after each image is processed, only leave the global loss variable that can be deleted after one batch is processed
             del image, pixel_masks, pixel_masks_tensor, scale_factor, original_image_size, sam_transform, resize_img, bbox_prompts, point_prompts, input_labels_prompts, image_embeddings, sparse_embeddings, dense_embeddings, low_res_masks, iou_predictions, high_res_masks
-            
+
+        logger.debug(f'Batch Loss: Instances: {instances}, Avg. Focal Loss: {focal_loss/instances}, Avg. Dice Loss: {dice_loss/instances}, Avg. IoU Loss: {iou_loss/instances}')    
         
         # Update the model after each batch            
         focal_loss = (focal_loss/instances) 
@@ -222,13 +232,7 @@ def main():
     #Put the model in the train mode
     model.to(device)    # Put the model on GPU
 
-    # Create a folder to save the model and the logs based on the current time
-    current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-    output_dir = cfg.OUTPUT_DIR + current_time
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    logger = setup_logger('SAM', output_dir)
+    logger.info(f'Config:\n{cfg}')
 
     training_losses = []
     validation_losses = []
@@ -251,7 +255,7 @@ def main():
 
         logger.info(f'Train Loss: {epoch_train_loss}, Valid Loss: {epoch_valid_loss}')
 
-        if epoch % 30 == 0:
+        if epoch % 2 == 0:
             logger.info(f'\nSaving the model at epoch {epoch}\n')
             torch.save(model.state_dict(), f"{output_dir}/model_checkpoints/sam_checkpoint_{epoch}.pth")
 
