@@ -19,6 +19,7 @@ _C = CN()
 _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_l_0b3195.pth"
+_C.MODEL.TYPE = "large"
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -62,7 +63,7 @@ _C.DATALOADER.TEST_DATA = 0.2  # 20% of the batched data for testing
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.SOLVER = CN()
-_C.SOLVER.MAX_EPOCHS = 50
+_C.SOLVER.MAX_EPOCHS = 15
 _C.SOLVER.ITEMS_PER_BATCH = 4
 _C.SOLVER.START_LR = 0.01
 _C.SOLVER.MIN_LR = 0.000001
