@@ -34,7 +34,7 @@ class SAM_Dataloader(DataLoader):
         # Split the data into train, validation and test sets
         train_size = int(self.cfg.DATALOADER.TRAIN_DATA * len(self.train_valid_dataset))   
         valid_size = len(self.train_valid_dataset) - train_size
-        train_dataset, valid_dataset = data.random_split(self.Dataset, [train_size, valid_size])
+        train_dataset, valid_dataset = data.random_split(self.train_valid_dataset, [train_size, valid_size])
 
         # Create the data loaders
         train_loader = data.DataLoader(

@@ -27,12 +27,12 @@ _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
 
 # For Large Model
-# _C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_l_0b3195.pth"
-# _C.MODEL.TYPE = "large"
+_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_l_0b3195.pth"
+_C.MODEL.TYPE = "large"
 
 # For Base Model
-_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
-_C.MODEL.TYPE = "base"
+# _C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+# _C.MODEL.TYPE = "base"
 
 # -----------------------------------------------------------------------------
 # INPUT
