@@ -25,7 +25,7 @@ class ParcelDataset(Dataset):
     The labels are stored in boolean masks. The masks are stored in a list.
     """
     
-    def __init__(self, path):
+    def __init__(self, path, train_data = True):
         """
         Args:
             path (string): Path to the folder containing the dataset.
@@ -33,7 +33,10 @@ class ParcelDataset(Dataset):
         """
         self.path = path
         # Read the merged parcel data geo json file, This contains the parcel id and the geometry of all the parcels
-        self.data = gpd.read_file(self.path + "parcel_data.geojson")
+        if (train_data):
+            self.data = gpd.read_file(self.path + "train_data.geojson")
+        else:
+            self.data = gpd.read_file(self.path + "test_data.geojson")
         # Get the image paths and corresponding pixel mask arrays
         self.data = self._get_image_pixel_masks(parcel_data=self.data, size=(448, 448))     #! Specify the image size which the model can expect
         

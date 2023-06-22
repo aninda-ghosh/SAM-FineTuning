@@ -19,7 +19,7 @@ _C = CN()
 # -----------------------------------------------------------------------------
 # Logger
 _C.LOGGER = CN()
-_C.LOGGER.LEVEL = "DEBUG"
+_C.LOGGER.LEVEL = "INFO"
 
 # -----------------------------------------------------------------------------
 # MODEL
@@ -45,7 +45,7 @@ _C.INPUT = CN()
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
 # Root directory of dataset
-_C.DATASETS.ROOT_DIR = "/home/aghosh57/Kerner-Lab/dataset/all_dataset/"
+_C.DATASETS.ROOT_DIR = "/home/aninda/Research/Kerner-Lab/datasets/all_dataset/"
 
 # This is used to generate the bboxes for non labeled images
 _C.BBOX = CN()
@@ -61,11 +61,10 @@ _C.BBOX.BOX_LIMITER = 100
 # -----------------------------------------------------------------------------
 _C.DATALOADER = CN()
 # Number of data loading threads
-_C.DATALOADER.NUM_WORKERS = 16   # Add any positive integer for multiple worker nodes
+_C.DATALOADER.NUM_WORKERS = 8   # Add any positive integer for multiple worker nodes
 # Number of images per batch during training, validation and testing
 _C.DATALOADER.TRAIN_DATA = 0.8  # 80% of the batched data for training
 _C.DATALOADER.VALID_DATA = 0.2  # 20% of the batched data for validation
-_C.DATALOADER.TEST_DATA = 0.2  # 20% of the batched data for testing
 
 
 # ---------------------------------------------------------------------------- #
@@ -85,12 +84,12 @@ _C.SOLVER.WEIGHT_DECAY = 0.0001
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.VALID = CN()
-_C.VALID.ITEMS_PER_BATCH = 2
+_C.VALID.ITEMS_PER_BATCH = 6
 
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.TEST = CN()
-_C.TEST.ITEMS_PER_BATCH = 2
+_C.TEST.ITEMS_PER_BATCH = 6
 
 # Loss function parameters
 _C.LOSS = CN()

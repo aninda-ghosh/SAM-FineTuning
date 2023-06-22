@@ -20,9 +20,11 @@ class SAM_Dataloader(DataLoader):
 
         self.cfg = cfg
         # Dataset constructor
-        self.Dataset = ParcelDataset(path=cfg.DATASETS.ROOT_DIR) 
+        self.train_valid_dataset = ParcelDataset(path=cfg.DATASETS.ROOT_DIR, train_data=True)
+        self.test_dataset = ParcelDataset(path=cfg.DATASETS.ROOT_DIR, train_data=False) 
         # Get the dataset length
-        self.dataset_length = len(self.Dataset)
+        self.train_valid_dataset_length = len(self.train_valid_dataset)
+        self.test_dataset_length = len(self.test_dataset)
 
     def build_dataloader(self):
         """
@@ -30,13 +32,9 @@ class SAM_Dataloader(DataLoader):
         """
 
         # Split the data into train, validation and test sets
-        train_size = int(self.cfg.DATALOADER.TRAIN_DATA * len(self.Dataset))   
-        test_size = len(self.Dataset) - train_size
-        train_dataset, test_dataset = data.random_split(self.Dataset, [train_size, test_size])
-
-        train_size = int(self.cfg.DATALOADER.TRAIN_DATA * len(train_dataset))
-        valid_size = len(train_dataset) - train_size
-        train_dataset, valid_dataset = data.random_split(train_dataset, [train_size, valid_size])
+        train_size = int(self.cfg.DATALOADER.TRAIN_DATA * len(self.train_valid_dataset))   
+        valid_size = len(self.train_valid_dataset) - train_size
+        train_dataset, valid_dataset = data.random_split(self.Dataset, [train_size, valid_size])
 
         # Create the data loaders
         train_loader = data.DataLoader(
@@ -48,7 +46,7 @@ class SAM_Dataloader(DataLoader):
         )
 
         test_loader = data.DataLoader(
-            test_dataset, batch_size=self.cfg.TEST.ITEMS_PER_BATCH, shuffle=False, num_workers=self.cfg.DATALOADER.NUM_WORKERS, collate_fn=lambda x: x
+            self.test_dataset, batch_size=self.cfg.TEST.ITEMS_PER_BATCH, shuffle=False, num_workers=self.cfg.DATALOADER.NUM_WORKERS, collate_fn=lambda x: x
         )
         
         return train_loader, valid_loader, test_loader
