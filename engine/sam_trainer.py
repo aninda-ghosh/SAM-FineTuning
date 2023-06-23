@@ -13,6 +13,7 @@ from torch.nn.functional import threshold, normalize
 
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 import gc
 
 
@@ -105,16 +106,16 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             upscaled_masks = model.postprocess_masks(low_res_masks, (1024, 1024), original_image_size).to(device)
             high_res_masks = normalize(threshold(upscaled_masks, 0.0, 0)).to(device).float()
 
-            # Plot the masks and the image (Only For Visualization Purposes)
-            # for i in range(len(high_res_masks)):
-            #     fig, ax = plt.subplots(1, 3)
-            #     ax[0].imshow(image)
-            #     ax[0].set_title("Original Image")
-            #     ax[1].imshow(high_res_masks[i].cpu())
-            #     ax[1].set_title("Predicted Mask")
-            #     ax[2].imshow(pixel_masks[i])
-            #     ax[2].set_title("GT Mask")
-            #     plt.show()
+            #Plot the masks and the image (Only For Visualization Purposes)
+            for i in range(len(high_res_masks)):
+                fig, ax = plt.subplots(1, 3)
+                ax[0].imshow(image)
+                ax[0].set_title("Original Image")
+                ax[1].imshow(high_res_masks[i].cpu())
+                ax[1].set_title("Predicted Mask")
+                ax[2].imshow(pixel_masks[i])
+                ax[2].set_title("GT Mask")
+                plt.show()
 
             # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss
             
