@@ -31,8 +31,12 @@ _C.MODEL.DEVICE = "cuda"
 # _C.MODEL.TYPE = "large"
 
 # For Base Model
-_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+# _C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+_C.MODEL.CHECKPOINT = "/home/aghosh57/Kerner-Lab/SAM-FineTuning/logs/Jun27_01-38-37/model_checkpoints/sam_checkpoint_1.pth"
 _C.MODEL.TYPE = "base"
+
+# Allows epochs to pass before saving the model
+_C.MODEL.SAVE_INTERVAL = 1
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -45,7 +49,7 @@ _C.INPUT = CN()
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
 # Root directory of dataset
-_C.DATASETS.ROOT_DIR = "/home/aninda/Research/Kerner-Lab/datasets/all_dataset/"
+_C.DATASETS.ROOT_DIR = "/home/aghosh57/Kerner-Lab/all_dataset/"
 
 # This is used to generate the bboxes for non labeled images
 _C.BBOX = CN()
@@ -54,7 +58,7 @@ _C.BBOX.MIN_DISTANCE = 50
 _C.BBOX.SIZE_REF = 0.25
 
 # This is used to control the per image masks instances to play with
-_C.BBOX.BOX_LIMITER = 100
+_C.BBOX.BOX_LIMITER = 50
 
 # This is used to remove the small masks from the dataset
 _C.MASKS = CN()
@@ -79,7 +83,7 @@ _C.DATALOADER.VALID_DATA = 0.2  # 20% of the batched data for validation
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.SOLVER = CN()
-_C.SOLVER.MAX_EPOCHS = 8
+_C.SOLVER.MAX_EPOCHS = 1
 _C.SOLVER.ITEMS_PER_BATCH = 1
 _C.SOLVER.START_LR = 0.01
 _C.SOLVER.MIN_LR = 0.000001
@@ -88,16 +92,16 @@ _C.SOLVER.WEIGHT_DECAY = 0.0001
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.VALID = CN()
-_C.VALID.ITEMS_PER_BATCH = 6
+_C.VALID.ITEMS_PER_BATCH = 1
 
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.TEST = CN()
-_C.TEST.ITEMS_PER_BATCH = 6
+_C.TEST.ITEMS_PER_BATCH = 1
 
 # Loss function parameters
 _C.LOSS = CN()
-_C.LOSS.FOCAL_LOSS_WEIGHT = 20
+_C.LOSS.FOCAL_LOSS_WEIGHT = 5
 _C.LOSS.DICE_LOSS_WEIGHT = 1
 
 # ---------------------------------------------------------------------------- #

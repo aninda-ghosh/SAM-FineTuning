@@ -54,7 +54,7 @@ def main():
     device = cfg.MODEL.DEVICE
     epochs = cfg.SOLVER.MAX_EPOCHS
 
-    #Set the portion of the model to be trained (We will train only the mask_decoder part)
+    # Set the portion of the model to be trained (We will train only the mask_decoder part)
     for name, param in model.named_parameters():
         if name.startswith('image_encoder') or name.startswith('prompt_encoder'):
             param.requires_grad = False
@@ -71,7 +71,7 @@ def main():
     Dice_Loss = DiceLoss()
     Iou_Loss = IoULoss()
 
-    #Put the model in the train mode
+    # Put the model in the train mode
     model.to(device)    # Put the model on GPU
 
     logger.info(f'Config:\n{cfg}')

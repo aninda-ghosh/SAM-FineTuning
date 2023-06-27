@@ -31,7 +31,7 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
         _instances = 0
         _focal_loss = 0
         _dice_loss = 0
-        _iou_loss = 0
+        # _iou_loss = 0
         
         if mode == 'TRAIN':
             # Zero the gradients for the optimizer
@@ -52,17 +52,15 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             resize_img = model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
 
             # TODO: Remove the pixelmasks whose area is less than the threshold
-            index_to_delete = []
+            gt_pixel_masks = []
             for i in range(len(pixel_masks)):
                 area = np.sum(pixel_masks[i])
-                if area < cfg.MASKS.MIN_AREA:
-                    index_to_delete.append(i)   # append the index of the mask to be deleted            
-            for index in index_to_delete:
-                del pixel_masks[index]
+                if area >= cfg.MASKS.MIN_AREA:
+                    gt_pixel_masks.append(pixel_masks[i])
 
 
             # Get the bbox, point prompts and input labels and transform accordingly
-            bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(gt_pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
             #scale the bbox prompts and point prompts according to the scale factor
             bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
             point_prompts = np.around(np.array(point_prompts) * scale_factor)
@@ -98,7 +96,7 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
                     image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
                     sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
                     dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
-                    multimask_output=False,
+                    multimask_output=True,
                 )
             else:
                 with torch.no_grad():
@@ -108,7 +106,7 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
                         image_pe=model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
                         sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
                         dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
-                        multimask_output=False,
+                        multimask_output=True, # Since multi mask is enabled we will get 3 masks
                     )                    
             
             upscaled_masks = model.postprocess_masks(low_res_masks, (1024, 1024), original_image_size).to(device)
@@ -116,9 +114,9 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             
 
             #NOTE: This is for visualization purpose only
-            # stacked_high_res = high_res_masks.cpu()
+            # stacked_high_res = high_res_masks.detach().cpu()
             # stacked_high_res = np.sum(np.stack(stacked_high_res), axis=0).squeeze(0)
-            # stacked_pixel_masks = np.sum(np.stack(pixel_masks), axis=0)
+            # stacked_pixel_masks = np.sum(np.stack(gt_pixel_masks), axis=0)
 
 
             # fig, ax = plt.subplots(1, 3)
@@ -140,13 +138,13 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             #         _pixel_masks.append(np.full((original_image_size[0], original_image_size[1]), False, dtype=bool))
             #     pixel_masks_tensor = torch.as_tensor(np.array(_pixel_masks).astype(float)).to(device).float()
             # else:
-            pixel_masks_tensor = torch.as_tensor(np.array(pixel_masks).astype(float)).to(device).float()
+            pixel_masks_tensor = torch.as_tensor(np.array(gt_pixel_masks).astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
                 try:
-                    _focal_loss += focal_loss(high_res_masks[i], pixel_masks_tensor[i])
-                    _dice_loss += dice_loss(high_res_masks[i], pixel_masks_tensor[i])
-                    _iou_loss += iou_loss(high_res_masks[i], pixel_masks_tensor[i], iou_predictions[i][0].to(device))
+                    _focal_loss += min(focal_loss(high_res_masks[i], pixel_masks_tensor[i]))
+                    _dice_loss += min(dice_loss(high_res_masks[i], pixel_masks_tensor[i]))
+                    # _iou_loss += iou_loss(high_res_masks[i], pixel_masks_tensor[i], iou_predictions[i][0].to(device))
                     _instances += 1
                 except:
                     # Catch the error and continue
@@ -157,12 +155,12 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             # delete all the local variables and cuda cache after each image is processed, only leave the global loss variable that can be deleted after one batch is processed
             del image, pixel_masks, pixel_masks_tensor, scale_factor, original_image_size, sam_transform, resize_img, bbox_prompts, point_prompts, input_labels_prompts, image_embeddings, sparse_embeddings, dense_embeddings, low_res_masks, iou_predictions, high_res_masks
 
-        logger.debug(f'Batch Loss: Instances: {_instances}, Avg. Focal Loss: {_focal_loss/_instances}, Avg. Dice Loss: {_dice_loss/_instances}, Avg. IoU Loss: {_iou_loss/_instances}')    
+        logger.debug(f'Batch Loss: Instances: {_instances}, Avg. Focal Loss: {_focal_loss/_instances}, Avg. Dice Loss: {_dice_loss/_instances}')    
         
         # Update the model after each batch            
         _focal_loss = (_focal_loss/_instances) 
         _dice_loss = (_dice_loss/_instances)   
-        _iou_loss = (_iou_loss/_instances)
+        # _iou_loss = (_iou_loss/_instances)
 
         # Update the model with the loss
         loss = (cfg.LOSS.FOCAL_LOSS_WEIGHT * _focal_loss) + (cfg.LOSS.DICE_LOSS_WEIGHT * _dice_loss)
@@ -238,11 +236,12 @@ def do_train(
         epoch_valid_loss /= (epoch)
         validation_losses.append(epoch_valid_loss)
 
-        scheduler.step(metrics=epoch_valid_loss)
+        # scheduler.step(metrics=epoch_valid_loss)
+        scheduler.step()
 
         logger.info(f'Train Loss: {epoch_train_loss}, Validation Loss: {epoch_valid_loss}')
 
-        if epoch % 2 == 0:
+        if epoch % cfg.MODEL.SAVE_INTERVAL == 0:
             logger.info(f'\nSaving the model at epoch {epoch}\n')
             torch.save(model.state_dict(), f"{output_dir}/model_checkpoints/sam_checkpoint_{epoch}.pth")
 

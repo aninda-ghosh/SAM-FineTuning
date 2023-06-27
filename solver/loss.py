@@ -20,13 +20,15 @@ class FocalLoss(nn.Module):
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor, alpha=ALPHA, gamma=GAMMA):
         smooth=1e-6   # Used to prevent division by zero.
 
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
         targets = targets.view(-1)
-
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        BCE_EXP = torch.exp(-BCE)
-        focal_loss = alpha * (1 - BCE_EXP)**gamma * BCE
+        focal_loss = []
+        
+        for input in inputs:
+            #flatten label and prediction tensors
+            input = input.view(-1)
+            BCE = F.binary_cross_entropy(input, targets, reduction='mean')
+            BCE_EXP = torch.exp(-BCE)
+            focal_loss.append(alpha * (1 - BCE_EXP)**gamma * BCE)
 
         return focal_loss
 
@@ -39,14 +41,18 @@ class DiceLoss(nn.Module):
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor):
         smooth=1e-6   # Used to prevent division by zero.
 
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
         targets = targets.view(-1)
+        dice_loss = []
+        for input in inputs:
+            #flatten label and prediction tensors
+            input = input.view(-1)
+        
+            intersection = (input * targets).sum()
+            dice_score = (2. * intersection + smooth) / (input.sum() + targets.sum() + smooth)
 
-        intersection = (inputs * targets).sum()
-        dice = (2. * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
+            dice_loss.append(1 - dice_score)
 
-        return 1 - dice
+        return dice_loss
     
 
 class IoULoss(nn.Module):
