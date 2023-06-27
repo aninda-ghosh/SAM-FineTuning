@@ -148,7 +148,9 @@ class ParcelDataset(Dataset):
             # If the parcel has no labels, let's keep it with no labels and no prompts
             if len(polygon_mask_list) == 0:
                 # Store the image path based on the current geoJSON file name only if the parcel has labels
-                processed_data.append((self.path + parcel_id + '.png', []))
+                # processed_data.append((self.path + parcel_id + '.png', []))
+                # NOTE: We are not storing the image path if the parcel has no labels, temporarily removing this penalty
+                pass
             else:
                 # Get the pixel masks for the parcel
                 pixel_masks = self._convert_polygons_to_pixels(geometry, polygon_mask_list, size)

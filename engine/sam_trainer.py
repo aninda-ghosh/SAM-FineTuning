@@ -51,6 +51,16 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             resize_img = torch.as_tensor(resize_img.transpose(2, 0, 1)).to(device)
             resize_img = model.preprocess(resize_img[None,:,:,:]) # (1, 3, 1024, 1024)
 
+            # TODO: Remove the pixelmasks whose area is less than the threshold
+            index_to_delete = []
+            for i in range(len(pixel_masks)):
+                area = np.sum(pixel_masks[i])
+                if area < cfg.MASKS.MIN_AREA:
+                    index_to_delete.append(i)   # append the index of the mask to be deleted            
+            for index in index_to_delete:
+                del pixel_masks[index]
+
+
             # Get the bbox, point prompts and input labels and transform accordingly
             bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
             #scale the bbox prompts and point prompts according to the scale factor
@@ -70,8 +80,6 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
                 # Obtain the image embeddings from the image encoder, image encoder here is run with inference mode (Strict version of no grad)
                 # This will be done only once
                 image_embeddings = model.image_encoder(resize_img)  # (B,256,64,64)
-                #TODO: Store the image embeddings in torch cache for later use
-                    
 
                 # Obtain the sparse and dense embeddings from the prompt encoder, prompt encoder here is run with inference mode (Strict version of no grad)
                 # if points are provided then providing labels are mandatory
@@ -105,28 +113,34 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             
             upscaled_masks = model.postprocess_masks(low_res_masks, (1024, 1024), original_image_size).to(device)
             high_res_masks = normalize(threshold(upscaled_masks, 0.0, 0)).to(device).float()
-
-            #Plot the masks and the image (Only For Visualization Purposes)
-            for i in range(len(high_res_masks)):
-                fig, ax = plt.subplots(1, 3)
-                ax[0].imshow(image)
-                ax[0].set_title("Original Image")
-                ax[1].imshow(high_res_masks[i].cpu())
-                ax[1].set_title("Predicted Mask")
-                ax[2].imshow(pixel_masks[i])
-                ax[2].set_title("GT Mask")
-                plt.show()
-
-            # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss
             
-            if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
-                _pixel_masks = []
-                # generate boolean pixel masks with image original size, use False as the mask value
-                for i in range(len(high_res_masks)):
-                    _pixel_masks.append(np.full((original_image_size[0], original_image_size[1]), False, dtype=bool))
-                pixel_masks_tensor = torch.as_tensor(np.array(_pixel_masks).astype(float)).to(device).float()
-            else:
-                pixel_masks_tensor = torch.as_tensor(np.array(pixel_masks).astype(float)).to(device).float()
+
+            #NOTE: This is for visualization purpose only
+            # stacked_high_res = high_res_masks.cpu()
+            # stacked_high_res = np.sum(np.stack(stacked_high_res), axis=0).squeeze(0)
+            # stacked_pixel_masks = np.sum(np.stack(pixel_masks), axis=0)
+
+
+            # fig, ax = plt.subplots(1, 3)
+            # ax[0].imshow(image)
+            # ax[0].set_title("Original Image")
+            # ax[1].imshow(stacked_high_res)
+            # ax[1].set_title("Predicted Mask")
+            # ax[2].imshow(stacked_pixel_masks)
+            # ax[2].set_title("GT Mask")
+            # plt.show()
+
+
+            # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss            
+            # NOTE: This is not needed now
+            # if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
+            #     _pixel_masks = []
+            #     # generate boolean pixel masks with image original size, use False as the mask value
+            #     for i in range(len(high_res_masks)):
+            #         _pixel_masks.append(np.full((original_image_size[0], original_image_size[1]), False, dtype=bool))
+            #     pixel_masks_tensor = torch.as_tensor(np.array(_pixel_masks).astype(float)).to(device).float()
+            # else:
+            pixel_masks_tensor = torch.as_tensor(np.array(pixel_masks).astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
                 try:

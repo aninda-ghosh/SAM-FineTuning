@@ -27,12 +27,12 @@ _C.MODEL = CN()
 _C.MODEL.DEVICE = "cuda"
 
 # For Large Model
-_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_l_0b3195.pth"
-_C.MODEL.TYPE = "large"
+# _C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_l_0b3195.pth"
+# _C.MODEL.TYPE = "large"
 
 # For Base Model
-# _C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
-# _C.MODEL.TYPE = "base"
+_C.MODEL.CHECKPOINT = "./modeling/model_checkpoints/sam_vit_b_01ec64.pth"
+_C.MODEL.TYPE = "base"
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -56,6 +56,10 @@ _C.BBOX.SIZE_REF = 0.25
 # This is used to control the per image masks instances to play with
 _C.BBOX.BOX_LIMITER = 100
 
+# This is used to remove the small masks from the dataset
+_C.MASKS = CN()
+_C.MASKS.MIN_AREA = 50
+
 # -----------------------------------------------------------------------------
 # DataLoader
 # -----------------------------------------------------------------------------
@@ -75,8 +79,8 @@ _C.DATALOADER.VALID_DATA = 0.2  # 20% of the batched data for validation
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.SOLVER = CN()
-_C.SOLVER.MAX_EPOCHS = 15
-_C.SOLVER.ITEMS_PER_BATCH = 4
+_C.SOLVER.MAX_EPOCHS = 8
+_C.SOLVER.ITEMS_PER_BATCH = 1
 _C.SOLVER.START_LR = 0.01
 _C.SOLVER.MIN_LR = 0.000001
 _C.SOLVER.WEIGHT_DECAY = 0.0001
