@@ -55,6 +55,22 @@ class DiceLoss(nn.Module):
         return dice_loss
     
 
+class MSELoss(nn.Module):
+
+    def __init__(self, weight=None, size_average=True):
+        super().__init__()
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor):
+        targets = targets.view(-1)
+        mse_loss = []
+        for input in inputs:
+            input = input.view(-1)
+            MSE_LOSS = nn.MSELoss()
+            mse_loss.append(MSE_LOSS(input, targets))
+        
+        return mse_loss
+
+
 class IoULoss(nn.Module):
 
     def __init__(self, weight=None, size_average=True):
