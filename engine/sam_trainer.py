@@ -5,7 +5,7 @@
 """
 
 from modeling.segment_anything.utils.transforms import ResizeLongestSide
-from utils.data_support import get_bbox_point_and_inputlabel_prompts
+from utils.data_support import get_bbox_point_and_inputlabel_prompts, generate_bounding_boxes
 
 import torch
 import torch.nn.functional as F
@@ -60,19 +60,21 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, mse_los
 
 
             # Get the bbox, point prompts and input labels and transform accordingly
-            bbox_prompts, _, _ = get_bbox_point_and_inputlabel_prompts(gt_pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            # bbox_prompts, _, _ = get_bbox_point_and_inputlabel_prompts(gt_pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            
+            # Generate equally spaced bounding boxes
+            bbox_prompts = generate_bounding_boxes(image.size[0], image.size[1], int(image.size[0]*0.25))
+            
             #scale the bbox prompts and point prompts according to the scale factor
             bbox_prompts = sam_transform.apply_boxes(np.array(bbox_prompts), original_image_size)
-            # bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
-            # point_prompts = np.around(np.array(point_prompts) * scale_factor)
-
+            
             bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
 
             # limit the number of prompts to the box limiter value
-            if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
-                bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
-                # point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
-                # input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
+            # if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
+            #     bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
+            #     # point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
+            #     # input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
         
             
             with torch.no_grad():
@@ -114,31 +116,10 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, mse_los
             high_res_masks = normalize(threshold(upscaled_masks, 0.0, 0)).to(device).float()
             
 
-            #NOTE: This is for visualization purpose only
-            # stacked_high_res = high_res_masks.detach().cpu()
-            # stacked_high_res = np.sum(np.stack(stacked_high_res), axis=0).squeeze(0)
-            # stacked_pixel_masks = np.sum(np.stack(gt_pixel_masks), axis=0)
+
+            
 
 
-            # fig, ax = plt.subplots(1, 3)
-            # ax[0].imshow(image)
-            # ax[0].set_title("Original Image")
-            # ax[1].imshow(stacked_high_res)
-            # ax[1].set_title("Predicted Mask")
-            # ax[2].imshow(stacked_pixel_masks)
-            # ax[2].set_title("GT Mask")
-            # plt.show()
-
-
-            # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss            
-            # NOTE: This is not needed now
-            # if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
-            #     _pixel_masks = []
-            #     # generate boolean pixel masks with image original size, use False as the mask value
-            #     for i in range(len(high_res_masks)):
-            #         _pixel_masks.append(np.full((original_image_size[0], original_image_size[1]), False, dtype=bool))
-            #     pixel_masks_tensor = torch.as_tensor(np.array(_pixel_masks).astype(float)).to(device).float()
-            # else:
             pixel_masks_tensor = torch.as_tensor(np.array(gt_pixel_masks).astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
