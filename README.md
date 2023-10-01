@@ -57,27 +57,26 @@ do_train(cfg, model, train_loader, val_loader, optimizer, None, F.cross_entropy)
 
 # In Details
 ```
-├──  config
-│    └── defaults.py  - here's the default config file. 
-├──  data  
-│    └── datasets  - here's the datasets folder that is responsible for all data handling.
-│    └── transforms  - here's the data preprocess folder that is responsible for all data augmentation.
-│    └── build.py  		   - here's the file to make dataloader.
-│    └── collate_batch.py   - here's the file that is responsible for merges a list of samples to form a mini-batch.
-├──  engine
-│   ├── trainer.py     - this file contains the train loops.
-│   └── inference.py   - this file contains the inference process.
-├── modeling            - this folder contains any model of your project.
-│   └── example_model.py
-├── solver             - this folder contains optimizer of your project.
+├── config
+│   └── defaults.py         - here's the default config file. 
+├── data  
+│   └── datasets            - here's the datasets folder that is responsible for all data handling.
+│   └── transforms          - here's the data preprocess folder that is responsible for all data augmentation.
+│   └── build.py  	        - here's the file to make dataloader.
+│   └── collate_batch.py    - here's the file that is responsible for merges a list of samples to form a mini-batch.
+├── engine
+│   ├── trainer.py          - this file contains the train loops.
+│   └── inference.py        - this file contains the inference process.
+├── modeling                - this folder contains segment anything model definitions.
+│   └── segment_anything
+├── solver                  - this folder contains optimizer of the project.
 │   └── build.py
 │   └── lr_scheduler.py
-├──  tools                - here's the train/test model of your project.
-│    └── train_net.py  - here's an example of train model that is responsible for the whole pipeline.
+├── tools                   - here's the train/test model of the project.
+│   └── train_net.py        - here's an example of train model that is responsible for the whole pipeline.
 └── utils
     └── logger.py
 ```
-
 
 # Future Work
 
