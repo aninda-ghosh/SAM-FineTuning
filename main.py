@@ -17,7 +17,7 @@ from config import cfg
 
 from data.build import SAM_Dataloader
 from modeling.segment_anything import prepare_sam
-from solver.optimizer import build_optimizer
+from solver.optimizer import build_optimizer, build_custom_optimizer
 from solver.lr_schedular import build_lrSchedular
 from solver.loss import FocalLoss, DiceLoss
 
@@ -28,7 +28,7 @@ from config import cfg  # Import the default config file
 import torch
 import numpy as np
 
-from solver.loss import FocalLoss, DiceLoss, IoULoss
+from solver.loss import FocalLoss, DiceLoss, IoULoss, MSELoss
 from engine.sam_trainer import do_train
 
 
@@ -54,25 +54,26 @@ def main():
     device = cfg.MODEL.DEVICE
     epochs = cfg.SOLVER.MAX_EPOCHS
 
-    # Set the portion of the model to be trained (We will train only the mask_decoder part)
+    # Set the portion of the model to be trained (We will train only the mask_decoder part keeping aside the iou_prediction_head)
     for name, param in model.named_parameters():
-        if name.startswith('image_encoder') or name.startswith('prompt_encoder'):
+        if name.startswith('image_encoder') or name.startswith('prompt_encoder') or name.startswith('mask_decoder.iou_prediction_head'):
             param.requires_grad = False
     
+    # Get the optimizer and scheduler
+    optimizer = build_custom_optimizer(cfg, model)
+    scheduler = build_lrSchedular(cfg=cfg, optimizer=optimizer)
+
+    Mse_Loss = MSELoss()
+    Dice_Loss = DiceLoss()
+    Iou_Loss = IoULoss()
+
     # Get the dataloader and prepare the train, validation and test dataloader
     sam_dataloader = SAM_Dataloader(cfg)
     train_loader, valid_loader, test_loader = sam_dataloader.build_dataloader()
 
-    # Get the optimizer and scheduler
-    optimizer = build_optimizer(cfg, model)
-    scheduler = build_lrSchedular(cfg=cfg, optimizer=optimizer)
-
-    Focal_Loss = FocalLoss()
-    Dice_Loss = DiceLoss()
-    Iou_Loss = IoULoss()
-
     # Put the model in the train mode
     model.to(device)    # Put the model on GPU
+
 
     logger.info(f'Config:\n{cfg}')
 
@@ -88,7 +89,7 @@ def main():
         test_dataloader = test_loader,
         optimizer = optimizer,
         scheduler = scheduler,
-        focal_loss = Focal_Loss,
+        mse_loss = Mse_Loss,
         dice_loss = Dice_Loss,
         iou_loss = Iou_Loss,
         epochs = epochs,

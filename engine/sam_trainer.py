@@ -5,7 +5,7 @@
 """
 
 from modeling.segment_anything.utils.transforms import ResizeLongestSide
-from utils.data_support import get_bbox_point_and_inputlabel_prompts
+from utils.data_support import get_bbox_point_and_inputlabel_prompts, generate_bounding_boxes
 
 import torch
 import torch.nn.functional as F
@@ -18,7 +18,7 @@ import gc
 
 
 # Define the epoch step function
-def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_loss, dice_loss, iou_loss):
+def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, mse_loss, dice_loss, iou_loss):
     _epoch_loss = 0
 
     if mode == 'TRAIN':
@@ -29,8 +29,8 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
     # Iterate over the batches and acculmulate the loss for each batch and update the model
     for batch in tqdm(data_loader, total=len(data_loader)):
         _instances = 0
-        _focal_loss = 0
-        _dice_loss = 0
+        _mse_loss = 0
+        # _dice_loss = 0
         # _iou_loss = 0
         
         if mode == 'TRAIN':
@@ -60,18 +60,21 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
 
 
             # Get the bbox, point prompts and input labels and transform accordingly
-            bbox_prompts, point_prompts, input_labels_prompts = get_bbox_point_and_inputlabel_prompts(gt_pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            # bbox_prompts, _, _ = get_bbox_point_and_inputlabel_prompts(gt_pixel_masks, original_image_size[0], original_image_size[1], cfg.BBOX.NUMBER, cfg.BBOX.MIN_DISTANCE, cfg.BBOX.SIZE_REF)
+            
+            # Generate equally spaced bounding boxes
+            bbox_prompts = generate_bounding_boxes(image.size[0], image.size[1], int(image.size[0]*0.25))
+            
             #scale the bbox prompts and point prompts according to the scale factor
-            bbox_prompts = np.around(np.array(bbox_prompts) * scale_factor)
-            point_prompts = np.around(np.array(point_prompts) * scale_factor)
-
+            bbox_prompts = sam_transform.apply_boxes(np.array(bbox_prompts), original_image_size)
+            
             bbox_prompts = torch.as_tensor(bbox_prompts).to(device)
 
             # limit the number of prompts to the box limiter value
-            if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
-                bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
-                point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
-                input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
+            # if len(bbox_prompts) > cfg.BBOX.BOX_LIMITER:
+            #     bbox_prompts = bbox_prompts[:cfg.BBOX.BOX_LIMITER]
+            #     # point_prompts = point_prompts[:cfg.BBOX.BOX_LIMITER]
+            #     # input_labels_prompts = input_labels_prompts[:cfg.BBOX.BOX_LIMITER]
         
             
             with torch.no_grad():
@@ -113,37 +116,16 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             high_res_masks = normalize(threshold(upscaled_masks, 0.0, 0)).to(device).float()
             
 
-            #NOTE: This is for visualization purpose only
-            # stacked_high_res = high_res_masks.detach().cpu()
-            # stacked_high_res = np.sum(np.stack(stacked_high_res), axis=0).squeeze(0)
-            # stacked_pixel_masks = np.sum(np.stack(gt_pixel_masks), axis=0)
+
+            
 
 
-            # fig, ax = plt.subplots(1, 3)
-            # ax[0].imshow(image)
-            # ax[0].set_title("Original Image")
-            # ax[1].imshow(stacked_high_res)
-            # ax[1].set_title("Predicted Mask")
-            # ax[2].imshow(stacked_pixel_masks)
-            # ax[2].set_title("GT Mask")
-            # plt.show()
-
-
-            # Calculate the loss between each instance of the mask and the predicted mask and accumulate the loss            
-            # NOTE: This is not needed now
-            # if len(pixel_masks) == 0:   # if no masks are provided then generate boolean pixel masks with image original size
-            #     _pixel_masks = []
-            #     # generate boolean pixel masks with image original size, use False as the mask value
-            #     for i in range(len(high_res_masks)):
-            #         _pixel_masks.append(np.full((original_image_size[0], original_image_size[1]), False, dtype=bool))
-            #     pixel_masks_tensor = torch.as_tensor(np.array(_pixel_masks).astype(float)).to(device).float()
-            # else:
             pixel_masks_tensor = torch.as_tensor(np.array(gt_pixel_masks).astype(float)).to(device).float()
 
             for i in range(len(high_res_masks)):
                 try:
-                    _focal_loss += min(focal_loss(high_res_masks[i], pixel_masks_tensor[i]))
-                    _dice_loss += min(dice_loss(high_res_masks[i], pixel_masks_tensor[i]))
+                    _mse_loss += min(mse_loss(high_res_masks[i], pixel_masks_tensor[i]))
+                    # _dice_loss += min(dice_loss(high_res_masks[i], pixel_masks_tensor[i]))
                     # _iou_loss += iou_loss(high_res_masks[i], pixel_masks_tensor[i], iou_predictions[i][0].to(device))
                     _instances += 1
                 except:
@@ -153,17 +135,17 @@ def epoch_step(mode, cfg, logger, model, device, data_loader, optimizer, focal_l
             
         
             # delete all the local variables and cuda cache after each image is processed, only leave the global loss variable that can be deleted after one batch is processed
-            del image, pixel_masks, pixel_masks_tensor, scale_factor, original_image_size, sam_transform, resize_img, bbox_prompts, point_prompts, input_labels_prompts, image_embeddings, sparse_embeddings, dense_embeddings, low_res_masks, iou_predictions, high_res_masks
+            del image, pixel_masks, pixel_masks_tensor, scale_factor, original_image_size, sam_transform, resize_img, bbox_prompts, image_embeddings, sparse_embeddings, dense_embeddings, low_res_masks, iou_predictions, high_res_masks
 
-        logger.debug(f'Batch Loss: Instances: {_instances}, Avg. Focal Loss: {_focal_loss/_instances}, Avg. Dice Loss: {_dice_loss/_instances}')    
+        logger.debug(f'Batch Loss: Instances: {_instances}, Avg. MSE Loss: {_mse_loss/_instances}')    
         
         # Update the model after each batch            
-        _focal_loss = (_focal_loss/_instances) 
-        _dice_loss = (_dice_loss/_instances)   
+        _mse_loss = (_mse_loss/_instances) 
+        # _dice_loss = (_dice_loss/_instances)   
         # _iou_loss = (_iou_loss/_instances)
 
         # Update the model with the loss
-        loss = (cfg.LOSS.FOCAL_LOSS_WEIGHT * _focal_loss) + (cfg.LOSS.DICE_LOSS_WEIGHT * _dice_loss)
+        loss = _mse_loss # + _dice_loss + _iou_loss
         
         if mode == 'TRAIN':
             loss.backward()
@@ -190,7 +172,7 @@ def do_train(
         test_dataloader,
         optimizer,
         scheduler,
-        focal_loss,
+        mse_loss,
         dice_loss,
         iou_loss,
         epochs,
@@ -211,7 +193,7 @@ def do_train(
                                         device= device, 
                                         data_loader = train_dataloader, 
                                         optimizer = optimizer, 
-                                        focal_loss = focal_loss, 
+                                        mse_loss = mse_loss, 
                                         dice_loss = dice_loss, 
                                         iou_loss = iou_loss
                                     )
@@ -229,7 +211,7 @@ def do_train(
                                         device = device, 
                                         data_loader = valid_dataloader, 
                                         optimizer = None, 
-                                        focal_loss = focal_loss, 
+                                        mse_loss = mse_loss, 
                                         dice_loss = dice_loss, 
                                         iou_loss = iou_loss
                                     )
@@ -245,21 +227,21 @@ def do_train(
             logger.info(f'\nSaving the model at epoch {epoch}\n')
             torch.save(model.state_dict(), f"{output_dir}/model_checkpoints/sam_checkpoint_{epoch}.pth")
 
-    # Test the model
-    logger.info('Test Step')
-    test_loss = epoch_step(
-                            mode = "TEST", 
-                            cfg = cfg, 
-                            logger = logger, 
-                            model = model, 
-                            device = device, 
-                            data_loader = test_dataloader, 
-                            optimizer = None, 
-                            focal_loss = focal_loss, 
-                            dice_loss = dice_loss, 
-                            iou_loss = iou_loss
-                        )
-    logger.info(f'\nTest Loss: {test_loss}')
+    # # Test the model
+    # logger.info('Test Step')
+    # test_loss = epoch_step(
+    #                         mode = "TEST", 
+    #                         cfg = cfg, 
+    #                         logger = logger, 
+    #                         model = model, 
+    #                         device = device, 
+    #                         data_loader = test_dataloader, 
+    #                         optimizer = None, 
+    #                         mse_loss = mse_loss, 
+    #                         dice_loss = dice_loss, 
+    #                         iou_loss = iou_loss
+    #                     )
+    # logger.info(f'\nTest Loss: {test_loss}')
 
     # Store the training and validation losses as numpy arrays in the output directory
     np.save(f"{output_dir}/training_losses.npy", np.array(training_losses))

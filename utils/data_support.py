@@ -170,3 +170,24 @@ def generate_random_bounding_boxes(image_width, image_height, number_boxes, min_
 
 #     # Display the image
 #     plt.show()
+
+def generate_bounding_boxes(image_width, image_height, box_size):
+    stride = int(0.6 * box_size)
+    num_boxes_horizontal = (image_width - box_size) // stride + 1
+    num_boxes_vertical = (image_height - box_size) // stride + 1
+
+    bounding_boxes = []
+    for i in range(num_boxes_horizontal):
+        for j in range(num_boxes_vertical):
+            start_x = i * stride
+            start_y = j * stride
+            end_x = start_x + box_size
+            end_y = start_y + box_size
+
+            # Adjust for boxes extending beyond image boundaries
+            end_x = min(end_x, image_width)
+            end_y = min(end_y, image_height)
+
+            bounding_boxes.append((start_x, start_y, end_x, end_y))
+
+    return bounding_boxes
